@@ -1,0 +1,53 @@
+# Publica `web/` en GitHub Pages — §12.4.
+#
+# La red sólo hace falta para instalar y actualizar la app. Durante el viaje no
+# se toca. Por eso basta con un host estático y no hay backend que mantener.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un despliegue a la vez; no se cancela el que esté en curso.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Si las pruebas fallan no se despliega: la app viaja sin red y no hay
+      # forma de arreglar nada desde el destino.
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

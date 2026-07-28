@@ -1,0 +1,61 @@
+{
+  "_comentario": "Registro del usuario (§5). La IA NUNCA escribe este archivo y los parches NUNCA lo tocan: existe para probar que el plan y el registro no se pisan. Sin él, W260 no puede dispararse.",
+
+  "tripId": "sevilla-prueba-2026",
+  "waypoints": {
+    "wp-01": {
+      "status": "visited",
+      "arrivedAt": "2026-09-13T09:15:00+02:00",
+      "leftAt": "2026-09-13T09:15:00+02:00"
+    },
+    "wp-02": {
+      "status": "visited",
+      "arrivedAt": "2026-09-13T09:48:00+02:00",
+      "leftAt": "2026-09-13T10:04:00+02:00",
+      "note": "Las plazas son tan estrechas como decían"
+    },
+    "wp-03": {
+      "status": "visited",
+      "arrivedAt": "2026-09-13T10:20:00+02:00",
+      "leftAt": "2026-09-13T12:05:00+02:00",
+      "note": "Entramos con la entrada de las 10:15 por los pelos. Los jardines, mejor de lo esperado",
+      "_espera_W260": "Si un parche elimina wp-03, hay que avisar antes de aplicar. El registro no se borra: queda huérfano (§2.5)"
+    },
+    "wp-04": {
+      "status": "partial",
+      "arrivedAt": "2026-09-13T12:15:00+02:00",
+      "leftAt": "2026-09-13T12:40:00+02:00",
+      "note": "Cerrada hasta las 14:30 los domingos. Nos quedamos fuera viendo la Giralda",
+      "_nota": "Prueba el estado `partial` de §5.1: ni visitado ni saltado"
+    },
+    "wp-05": {
+      "status": "visited",
+      "arrivedAt": "2026-09-13T12:50:00+02:00",
+      "leftAt": "2026-09-13T13:35:00+02:00",
+      "note": "El punto azul saltaba de calle en calle, como se esperaba"
+    },
+    "wp-10": {
+      "status": "skipped",
+      "at": "2026-09-13T17:40:00+02:00",
+      "_espera_W262": "Un parche que elimine wp-10 y cree otro waypoint con el mismo id heredaría en silencio este registro"
+    }
+  },
+
+  "improvised": [
+    {
+      "id": "imp-01",
+      "dayId": "d01",
+      "name": "Puesto de altramuces en la Alfalfa",
+      "coords": [37.3903, -5.9905],
+      "at": "2026-09-13T13:50:00+02:00",
+      "note": "Parada no planificada. Coordenadas del GPS, que por eso no pueden estar alucinadas (§7.1)"
+    }
+  ],
+
+  "days": {
+    "d01": {
+      "freeMode": false,
+      "closingNote": "Se nos fue la mañana en el Alcázar y ya no cuadró nada. La Catedral cerrada nos pilló de nuevas."
+    }
+  }
+}

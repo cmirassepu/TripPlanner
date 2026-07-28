@@ -1,0 +1,120 @@
+{
+  "_comentario": "ARCHIVO ROTO A PROPÓSITO. Cada bloque _espera describe el error que el validador debe cantar. Si carga sin protestar, el validador no sirve.",
+
+  "format": "trip-file",
+  "formatVersion": 1,
+  "tripId": "sevilla-prueba-2026",
+  "kind": "patch",
+  "version": 1,
+  "_espera_E001": "version 1 no es mayor que la ya aplicada (2). Debe rechazarse antes de tocar nada",
+  "generated": "2026-07-28T11:00:00Z",
+  "label": "Fixture de errores",
+
+  "payload": {
+    "ops": [
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-04.place",
+        "value": "torre-del-oro",
+        "_espera_E102": "El sitio 'torre-del-oro' no existe en places. Referencia rota"
+      },
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-03.duration",
+        "value": -30,
+        "_espera_E110": "Duración negativa"
+      },
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-05.duration",
+        "value": "cuarenta",
+        "_espera_E111": "Tipo incorrecto: se esperaba entero en minutos"
+      },
+      {
+        "op": "set",
+        "path": "days.d01.startTime",
+        "value": "25:70",
+        "_espera_E112": "Hora inválida"
+      },
+      {
+        "op": "set",
+        "path": "days.d99.startTime",
+        "value": "10:00",
+        "_espera_E103": "El día 'd99' no existe"
+      },
+      {
+        "op": "insertAfter",
+        "path": "days.d01.waypoints.2",
+        "value": { "id": "wp-99", "place": "setas", "duration": 30 },
+        "_espera_E120": "Ruta por índice en vez de por id. Prohibido: los índices se corrompen al insertar"
+      },
+      {
+        "op": "insertAfter",
+        "path": "days.d01.waypoints.wp-07",
+        "value": {
+          "id": "wp-05",
+          "place": "setas",
+          "duration": 30,
+          "travelFrom": 10
+        },
+        "_espera_E104": "Id duplicado: wp-05 ya existe en este día"
+      },
+      {
+        "op": "set",
+        "path": "places.alcazar.coords",
+        "value": [40.4168, -3.7038],
+        "_espera_W230": "Coordenadas a 390 km del resto de paradas del día. Esto es Madrid, no Sevilla"
+      },
+      {
+        "op": "set",
+        "path": "places.alcazar.hours.default",
+        "value": [["19:00", "09:30"]],
+        "_espera_E113": "Intervalo invertido: la apertura es posterior al cierre"
+      },
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-07.anchor",
+        "value": {
+          "type": "closing",
+          "time": "11:00",
+          "hard": true,
+          "label": { "es": "Ancla imposible" }
+        },
+        "_espera_W212": "Ancla inalcanzable: con las duraciones actuales no se llega a las 11:00"
+      },
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-09.travelFrom",
+        "value": 2,
+        "_espera_W231": "2 minutos a pie para 1,29 km (Mercado de Triana → Setas, tras el parche v2): 38,8 km/h. Muy por encima del techo de 7 km/h a pie. OJO: el aviso es de una sola dirección. Ir despacio es legítimo —este mismo fixture tiene tramos a 1,1 y 2,4 km/h por colas y sombra— y sólo se avisa de ir demasiado rápido"
+      },
+      {
+        "op": "set",
+        "path": "places.setas.facts",
+        "value": [
+          {
+            "text": { "es": "Dato inventado sin procedencia" },
+            "confidence": "verified"
+          }
+        ],
+        "_espera_W240": "confidence 'verified' sin campo source"
+      },
+      {
+        "op": "set",
+        "path": "places.casa-pilatos.deep",
+        "value": { "es": "Solo en español" },
+        "_espera_W250": "Falta la traducción en 'en'. El viaje declara languages ['es','en']"
+      },
+      {
+        "op": "quitar",
+        "path": "days.d01.waypoints.wp-11",
+        "_espera_E130": "Operación desconocida. Válidas: set, remove, insertAfter, insertBefore, merge"
+      },
+      {
+        "op": "remove",
+        "path": "days.d01.waypoints.wp-03",
+        "_espera_W260": "Se elimina un waypoint con datos del usuario asociados. Avisar antes de aplicar, no borrar el registro"
+      }
+    ]
+  }
+}

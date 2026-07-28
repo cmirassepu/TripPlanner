@@ -1,0 +1,25 @@
+{
+  "name": "Guía de viaje offline",
+  "short_name": "Viaje",
+  "description": "Guía de viaje que funciona sin conexión: itinerario, horarios, avisos y registro.",
+  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "orientation": "portrait",
+  "theme_color": "#1F6070",
+  "background_color": "#DCE2E1",
+  "lang": "es",
+  "icons": [
+    { "src": "./icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/json": [".json", ".trip"]
+      }
+    }
+  ]
+}

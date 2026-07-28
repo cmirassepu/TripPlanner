@@ -1,0 +1,12 @@
+node_modules/
+out/
+.DS_Store
+
+# Generados por `npm run build`. Se reconstruyen y el workflow los rehace en
+# cada despliegue, así que versionarlos sólo produce conflictos.
+web/app.js
+web/app.css
+web/sw.js
+web/icon-*.png
+web/data/
+web/meta.json

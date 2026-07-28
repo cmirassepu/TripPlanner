@@ -1,0 +1,94 @@
+{
+  "format": "trip-file",
+  "formatVersion": 1,
+  "tripId": "sevilla-prueba-2026",
+  "kind": "patch",
+  "version": 2,
+  "generated": "2026-07-28T10:30:00Z",
+  "label": "Arregla el conflicto de Triana y adelanta la salida",
+  "payload": {
+    "ops": [
+      {
+        "op": "set",
+        "path": "days.d01.startTime",
+        "value": "09:00",
+        "reason": {
+          "es": "Quince minutos antes para dar aire a toda la mañana",
+          "en": "Fifteen minutes earlier to give the whole morning some slack"
+        }
+      },
+      {
+        "op": "remove",
+        "path": "days.d01.waypoints.wp-06",
+        "reason": {
+          "es": "Se cae Venerables: horario sin confirmar y es lo de dropRank más bajo",
+          "en": "Venerables dropped: unconfirmed hours and the lowest dropRank"
+        }
+      },
+      {
+        "op": "remove",
+        "path": "days.d01.waypoints.wp-08",
+        "reason": {
+          "es": "Se cae Casa de Pilatos, una hora que no cabe si queremos llegar a Triana",
+          "en": "Casa de Pilatos dropped: an hour that does not fit if we want to reach Triana"
+        }
+      },
+      {
+        "op": "remove",
+        "path": "days.d01.waypoints.wp-10"
+      },
+      {
+        "op": "insertBefore",
+        "path": "days.d01.waypoints.wp-09",
+        "value": {
+          "id": "wp-10",
+          "place": "mercado-triana",
+          "duration": 40,
+          "travelFrom": 20,
+          "travelMode": "walking",
+          "priority": "key",
+          "dropRank": 8,
+          "anchor": {
+            "type": "closing",
+            "time": "17:00",
+            "hard": true,
+            "label": { "es": "Cierra el mercado (domingo)", "en": "Market closes (Sunday)" }
+          },
+          "notes": [
+            {
+              "type": "info",
+              "text": {
+                "es": "Ahora se llega sobre las 15:15, con hora y tres cuartos de margen",
+                "en": "Now arriving around 15:15, with well over an hour of slack"
+              }
+            }
+          ]
+        },
+        "reason": {
+          "es": "Triana pasa a antes de las Setas para llegar dentro de horario",
+          "en": "Triana moves before the Setas so it lands inside opening hours"
+        }
+      },
+      {
+        "op": "merge",
+        "path": "places.venerables.hours",
+        "value": {
+          "default": [["10:00", "18:00"]],
+          "note": {
+            "es": "Horario confirmado por teléfono el 28/07/2026",
+            "en": "Hours confirmed by phone on 28/07/2026"
+          }
+        },
+        "reason": {
+          "es": "Ya está verificado, aunque el sitio se haya caído del plan",
+          "en": "Now verified, even though the stop has left the plan"
+        }
+      },
+      {
+        "op": "set",
+        "path": "days.d01.waypoints.wp-09.travelFrom",
+        "value": 25
+      }
+    ]
+  }
+}

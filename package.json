@@ -1,0 +1,23 @@
+{
+  "name": "guia-viaje-offline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Guía de viaje offline — núcleo independiente de plataforma (§4, §6, §10)",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test": "node --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit",
+    "sevilla": "node scripts/sevilla.ts",
+    "build": "node scripts/build.ts",
+    "serve": "node scripts/serve.ts",
+    "check": "node scripts/check.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.7.2"
+  }
+}

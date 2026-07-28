@@ -1,0 +1,835 @@
+{
+  "format": "trip-file",
+  "formatVersion": 1,
+  "tripId": "sevilla-prueba-2026",
+  "kind": "trip",
+  "version": 1,
+  "generated": "2026-07-28T10:00:00Z",
+  "label": "Tour de prueba de campo en Sevilla",
+  "payload": {
+    "title": {
+      "es": "Sevilla · prueba de campo",
+      "en": "Seville · field test"
+    },
+    "startDate": "2026-09-13",
+    "endDate": "2026-09-14",
+    "defaultTimezone": "Europe/Madrid",
+    "languages": ["es", "en"],
+    "primaryLanguage": "es",
+    "currency": "EUR",
+    "travellers": { "adults": 2, "children": 1, "dogs": 1 },
+
+    "testNotes": {
+      "es": "Fixture de pruebas. Contiene a propósito: (1) DOS conflictos de horario, no uno: wp-10 llega a las 18:27 y el mercado cierra a las 17:00 los domingos, y wp-04 llega a las 12:07 cuando la Catedral no abre hasta las 14:30 los domingos. El segundo es el importante, porque el parche v2 NO lo arregla: sirve para comprobar que el validador se vuelve a ejecutar tras aplicar y no se fía de la etiqueta del parche. (2) datos unverified en venerables y plaza-espana, (3) un día sobrecargado, 10 h 14 min, (4) anclas de tipo booking, closing y departure, (5) un tramo driving, (6) un waypoint en callejón estrecho para probar el GPS, (7) un margen de sólo 3 minutos sobre un ancla dura en wp-03."
+    },
+
+    "stays": [
+      {
+        "id": "stay-casa",
+        "name": "Casa",
+        "place": "casa-bollullos",
+        "from": "2026-09-13",
+        "to": "2026-09-14",
+        "timezone": "Europe/Madrid",
+        "confirmation": null,
+        "notes": { "es": "Base de salida y regreso", "en": "Start and end point" }
+      }
+    ],
+
+    "places": {
+      "casa-bollullos": {
+        "id": "casa-bollullos",
+        "name": "Casa · Bollullos de la Mitación",
+        "coords": [37.3410, -6.1360],
+        "coordsSource": "user",
+        "address": "Bollullos de la Mitación, Sevilla",
+        "category": "lodging",
+        "hours": { "default": [["00:00", "23:59"]], "byDay": {}, "closedDays": [] },
+        "cost": { "adult": 0, "child": 0, "currency": "EUR", "note": null },
+        "contact": { "phone": null, "url": null },
+        "amenities": [],
+        "dog": { "allowed": true, "note": null, "confidence": "verified" },
+        "facts": [],
+        "deep": { "es": null, "en": null },
+        "links": { "wikipedia": { "es": null, "en": null }, "official": null, "maps": null }
+      },
+
+      "parking-colon": {
+        "id": "parking-colon",
+        "name": "Parking Paseo de Colón",
+        "coords": [37.3866659, -6.0004164],
+        "coordsSource": "places_api",
+        "address": "P.º de Cristóbal Colón, 10, Casco Antiguo, 41001 Sevilla",
+        "category": "transport",
+        "hours": { "default": [["00:00", "23:59"]], "byDay": {}, "closedDays": [] },
+        "cost": {
+          "adult": null,
+          "child": null,
+          "currency": "EUR",
+          "note": { "es": "Unos 1,80 €/h", "en": "About €1.80/h" }
+        },
+        "contact": { "phone": "+34954224239", "url": null },
+        "amenities": [],
+        "dog": { "allowed": true, "note": null, "confidence": "verified" },
+        "facts": [
+          {
+            "text": {
+              "es": "Plazas estrechas. Con coche grande, el Mercado del Arenal está a 50 m y suele salir más barato por día",
+              "en": "Tight spaces. With a big car, Mercado del Arenal is 50 m away and usually cheaper per day"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Lee la matrícula automáticamente. Se paga en máquina antes de salir",
+              "en": "Automatic plate recognition. Pay at the machine before leaving"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": { "es": null, "en": null },
+        "links": {
+          "wikipedia": { "es": null, "en": null },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3866659,-6.0004164&travelmode=driving"
+        }
+      },
+
+      "alcazar": {
+        "id": "alcazar",
+        "name": "Real Alcázar de Sevilla",
+        "coords": [37.3830519, -5.9902257],
+        "coordsSource": "places_api",
+        "address": "Patio de Banderas, s/n, Casco Antiguo, 41004 Sevilla",
+        "category": "monument",
+        "hours": {
+          "default": [["09:30", "19:00"]],
+          "byDay": {},
+          "closedDays": [],
+          "note": { "es": "Horario verificado julio 2026", "en": "Hours verified July 2026" }
+        },
+        "cost": {
+          "adult": null,
+          "child": null,
+          "currency": "EUR",
+          "note": {
+            "es": "Precio sin verificar. Entrada con hora asignada y se agota con semanas de antelación",
+            "en": "Price unverified. Timed entry, sells out weeks ahead"
+          }
+        },
+        "contact": { "phone": "+34954502324", "url": null },
+        "amenities": ["toilets", "shade", "cafe", "benches"],
+        "dog": {
+          "allowed": false,
+          "note": { "es": "No admiten perros salvo de asistencia", "en": "No dogs except assistance animals" },
+          "confidence": "unverified"
+        },
+        "facts": [
+          {
+            "text": {
+              "es": "Reservar con semanas de antelación. Hay gente que se queda fuera por presentarse el mismo día",
+              "en": "Book weeks ahead. People turn up on the day and cannot get in"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Una visita cómoda son unas dos horas y media. Con niños, hora y tres cuartos basta",
+              "en": "A comfortable visit is about two and a half hours"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "En verano los jardines a mediodía son inviables por el calor",
+              "en": "In summer the gardens at midday are unbearable"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "Palacio real en uso más antiguo de Europa. Empezó como fortaleza musulmana en el siglo X y se fue reconstruyendo capa sobre capa: almohade, mudéjar, gótico, renacentista y barroco. El Palacio de Pedro I, de 1364, lo levantaron alarifes de Toledo y Granada para un rey cristiano, y esa mezcla es exactamente lo que lo hace único.",
+          "en": "The oldest royal palace still in use in Europe. It began as a Muslim fortress in the 10th century and was rebuilt layer over layer: Almohad, Mudéjar, Gothic, Renaissance and Baroque. The Palace of Pedro I, from 1364, was built by craftsmen from Toledo and Granada for a Christian king, and that mixture is exactly what makes it singular."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Reales_Alc%C3%A1zares_de_Sevilla",
+            "en": "https://en.wikipedia.org/wiki/Royal_Alc%C3%A1zar_of_Seville"
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3830519,-5.9902257&travelmode=walking"
+        }
+      },
+
+      "catedral-giralda": {
+        "id": "catedral-giralda",
+        "name": "Catedral de Sevilla y La Giralda",
+        "coords": [37.3861784, -5.9926137],
+        "coordsSource": "places_api",
+        "address": "Av. de la Constitución, s/n, Casco Antiguo, 41004 Sevilla",
+        "category": "monument",
+        "hours": {
+          "default": [["10:45", "18:00"]],
+          "byDay": { "sun": [["14:30", "18:00"]] },
+          "closedDays": [],
+          "note": {
+            "es": "Los domingos abre por la tarde por el culto. SIN VERIFICAR: confirmar antes de ir",
+            "en": "Sundays open in the afternoon for worship. UNVERIFIED: confirm before going"
+          }
+        },
+        "cost": {
+          "adult": null,
+          "child": null,
+          "currency": "EUR",
+          "note": { "es": "Precio sin verificar", "en": "Price unverified" }
+        },
+        "contact": { "phone": "+34954214971", "url": null },
+        "amenities": ["toilets", "shade"],
+        "dog": { "allowed": false, "note": null, "confidence": "unverified" },
+        "facts": [
+          {
+            "text": {
+              "es": "La Giralda se sube por rampas, no por escaleras: 35 rampas y 17 escalones. Fácil con niños",
+              "en": "The Giralda is climbed by ramps, not stairs: 35 ramps and 17 steps. Easy with children"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, abril 2026"
+          },
+          {
+            "text": {
+              "es": "La vista desde arriba tiene una malla antipalomas que estorba algo en las fotos",
+              "en": "The view from the top has anti-pigeon wire that gets in the way of photos"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "La tumba de Colón está en la nave principal",
+              "en": "Columbus's tomb is in the main nave"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "La catedral gótica más grande del mundo, levantada sobre la mezquita almohade a partir de 1401. La Giralda era su alminar: los primeros dos tercios son almohades del siglo XII y el campanario renacentista se le añadió encima en el XVI. Se sube por rampas porque el muecín subía a caballo.",
+          "en": "The largest Gothic cathedral in the world, built over the Almohad mosque from 1401. The Giralda was its minaret: the lower two thirds are 12th-century Almohad, and the Renaissance belfry was added on top in the 16th. It is climbed by ramps because the muezzin rode up on horseback."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Catedral_de_Sevilla",
+            "en": "https://en.wikipedia.org/wiki/Seville_Cathedral"
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3861784,-5.9926137&travelmode=walking"
+        }
+      },
+
+      "santa-cruz": {
+        "id": "santa-cruz",
+        "name": "Barrio de Santa Cruz",
+        "coords": [37.3855, -5.9895],
+        "coordsSource": "geocoded",
+        "address": "Barrio de Santa Cruz, Casco Antiguo, 41004 Sevilla",
+        "category": "district",
+        "hours": { "default": [["00:00", "23:59"]], "byDay": {}, "closedDays": [] },
+        "cost": { "adult": 0, "child": 0, "currency": "EUR", "note": null },
+        "contact": { "phone": null, "url": null },
+        "amenities": ["shade"],
+        "dog": { "allowed": true, "note": null, "confidence": "verified" },
+        "facts": [
+          {
+            "text": {
+              "es": "PRUEBA DE GPS: callejones de dos metros con edificios altos. La señal rebota y el punto azul puede saltar cien metros. Si aguanta aquí, aguanta en cualquier sitio",
+              "en": "GPS TEST: two-metre alleys with tall buildings. Multipath makes the blue dot jump. If it holds here, it holds anywhere"
+            },
+            "confidence": "verified",
+            "source": "diseño de la prueba"
+          },
+          {
+            "text": {
+              "es": "Sombra casi todo el recorrido, que en septiembre importa",
+              "en": "Shade almost throughout, which matters in September"
+            },
+            "confidence": "verified",
+            "source": "conocimiento local"
+          }
+        ],
+        "deep": {
+          "es": "La antigua judería, vaciada tras el pogromo de 1391 y reordenada siglos después. Su trazado de callejones estrechos y quiebros no es pintoresquismo: es diseño climático, para dar sombra y romper el viento caliente.",
+          "en": "The old Jewish quarter, emptied after the 1391 pogrom and reorganised centuries later. Its tangle of narrow, kinked alleys is not picturesque accident but climate design: shade and a break on the hot wind."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Barrio_de_Santa_Cruz_(Sevilla)",
+            "en": null
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3855,-5.9895&travelmode=walking"
+        }
+      },
+
+      "venerables": {
+        "id": "venerables",
+        "name": "Hospital de los Venerables",
+        "coords": [37.3851509, -5.9899354],
+        "coordsSource": "places_api",
+        "address": "Pl. Venerables, 8, Casco Antiguo, 41004 Sevilla",
+        "category": "museum",
+        "hours": {
+          "default": null,
+          "byDay": {},
+          "closedDays": [],
+          "note": {
+            "es": "HORARIO DESCONOCIDO. Google no publica horas. El validador debe avisar de que no puede comprobar la llegada",
+            "en": "HOURS UNKNOWN. Google publishes none. The validator must flag that arrival cannot be checked"
+          }
+        },
+        "cost": {
+          "adult": null,
+          "child": null,
+          "currency": "EUR",
+          "note": { "es": "Sin verificar", "en": "Unverified" }
+        },
+        "contact": { "phone": "+34954564595", "url": null },
+        "amenities": ["toilets", "shade"],
+        "dog": { "allowed": false, "note": null, "confidence": "unverified" },
+        "facts": [
+          {
+            "text": {
+              "es": "Se recorre en 30-40 minutos. Audioguía incluida",
+              "en": "Takes 30–40 minutes. Audio guide included"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Suele estar vacío incluso cuando el resto del centro está a reventar",
+              "en": "Usually empty even when the rest of the centre is heaving"
+            },
+            "confidence": "unverified",
+            "source": null
+          }
+        ],
+        "deep": {
+          "es": "Residencia barroca para sacerdotes ancianos, de 1675. El patio hundido con la fuente central es el gran hallazgo, y la iglesia guarda frescos de Valdés Leal.",
+          "en": "A Baroque residence for elderly priests, from 1675. The sunken patio with its central fountain is the find, and the church holds frescoes by Valdés Leal."
+        },
+        "links": {
+          "wikipedia": { "es": "https://es.wikipedia.org/wiki/Hospital_de_los_Venerables", "en": null },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3851509,-5.9899354&travelmode=walking"
+        }
+      },
+
+      "plaza-espana": {
+        "id": "plaza-espana",
+        "name": "Plaza de España",
+        "coords": [37.3771957, -5.9868930],
+        "coordsSource": "places_api",
+        "address": "Av. Isabel la Católica, 41004 Sevilla",
+        "category": "plaza",
+        "hours": { "default": [["08:00", "23:59"]], "byDay": {}, "closedDays": [] },
+        "cost": { "adult": 0, "child": 0, "currency": "EUR", "note": null },
+        "contact": { "phone": null, "url": null },
+        "amenities": ["benches", "water"],
+        "dog": { "allowed": true, "note": null, "confidence": "verified" },
+        "facts": [
+          {
+            "text": {
+              "es": "Sin sombra en el centro de la plaza. En verano es una sartén",
+              "en": "No shade in the middle of the square. In summer it is a frying pan"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Por la tarde los soportales del edificio dan sombra continua",
+              "en": "In the afternoon the building's arcades give continuous shade"
+            },
+            "confidence": "unverified",
+            "source": null
+          },
+          {
+            "text": {
+              "es": "Los 48 bancos de azulejos representan una provincia cada uno. Buen juego para niños: encontrar Sevilla",
+              "en": "The 48 tiled alcoves each represent a province. Good game for children: find Seville"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "La construyó Aníbal González para la Exposición Iberoamericana de 1929, y es el edificio más caro que se levantó nunca en Sevilla. Su forma de semicírculo abrazando el canal era literal: los brazos abiertos de España hacia América.",
+          "en": "Built by Aníbal González for the 1929 Ibero-American Exposition, and the most expensive building ever raised in Seville. The semicircle embracing the canal was meant literally: Spain's arms open towards the Americas."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Plaza_de_Espa%C3%B1a_(Sevilla)",
+            "en": "https://en.wikipedia.org/wiki/Plaza_de_Espa%C3%B1a,_Seville"
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3771957,-5.9868930&travelmode=walking"
+        }
+      },
+
+      "casa-pilatos": {
+        "id": "casa-pilatos",
+        "name": "Casa de Pilatos",
+        "coords": [37.3899991, -5.9872061],
+        "coordsSource": "places_api",
+        "address": "Pl. de Pilatos, 1, Casco Antiguo, 41003 Sevilla",
+        "category": "monument",
+        "hours": { "default": [["09:00", "18:00"]], "byDay": {}, "closedDays": [] },
+        "cost": {
+          "adult": 12,
+          "child": null,
+          "currency": "EUR",
+          "note": {
+            "es": "12 € la planta baja, patios y jardines. La planta alta es visita guiada aparte",
+            "en": "€12 for ground floor, patios and gardens. Upper floor is a separate guided tour"
+          }
+        },
+        "contact": { "phone": "+34954225298", "url": null },
+        "amenities": ["toilets", "shade", "benches"],
+        "dog": { "allowed": false, "note": null, "confidence": "unverified" },
+        "facts": [
+          {
+            "text": {
+              "es": "La alternativa al Alcázar si no consigues entradas. Mucha menos cola",
+              "en": "The alternative to the Alcázar if you cannot get tickets. Far less queue"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Hora u hora y media. Audioguía por QR: hacen falta móvil y auriculares propios",
+              "en": "One to one and a half hours. QR audio guide: you need your own phone and headphones"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "Palacio del siglo XVI donde se cruzan el mudéjar y el renacimiento italiano en el mismo patio. La familia trajo de Italia una colección de escultura romana que sigue repartida por los patios, y el resultado es una casa andaluza con dioses romanos en las esquinas.",
+          "en": "A 16th-century palace where Mudéjar and Italian Renaissance meet in the same courtyard. The family brought back a collection of Roman sculpture from Italy that is still scattered around the patios."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Casa_de_Pilatos",
+            "en": "https://en.wikipedia.org/wiki/Casa_de_Pilatos"
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3899991,-5.9872061&travelmode=walking"
+        }
+      },
+
+      "setas": {
+        "id": "setas",
+        "name": "Setas de Sevilla",
+        "coords": [37.3929799, -5.9921608],
+        "coordsSource": "places_api",
+        "address": "Pl. de la Encarnación, s/n, Casco Antiguo, 41003 Sevilla",
+        "category": "viewpoint",
+        "hours": { "default": [["09:30", "23:45"]], "byDay": {}, "closedDays": [] },
+        "cost": {
+          "adult": null,
+          "child": null,
+          "currency": "EUR",
+          "note": {
+            "es": "Precio sin verificar. La entrada permite subir dos veces el mismo día, de día y de noche",
+            "en": "Price unverified. The ticket allows two visits the same day, daytime and night"
+          }
+        },
+        "contact": { "phone": "+34954561512", "url": null },
+        "amenities": ["toilets", "cafe"],
+        "dog": { "allowed": false, "note": null, "confidence": "unverified" },
+        "facts": [
+          {
+            "text": {
+              "es": "Con una sola entrada se sube dos veces el mismo día. La segunda, al anochecer",
+              "en": "One ticket allows two climbs the same day. Do the second at dusk"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          },
+          {
+            "text": {
+              "es": "Se baja en ascensor, pero es fácil acabar en las escaleras sin querer",
+              "en": "You descend by lift, but it is easy to end up on the stairs by mistake"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "La estructura de madera más grande del mundo, de Jürgen Mayer, terminada en 2011. Las obras destaparon un yacimiento romano y almohade que obligó a rediseñarlo entero y está bajo la plaza, en el Antiquarium.",
+          "en": "The largest wooden structure in the world, by Jürgen Mayer, finished in 2011. Building it uncovered Roman and Almohad remains that forced a complete redesign; they sit beneath the square in the Antiquarium."
+        },
+        "links": {
+          "wikipedia": {
+            "es": "https://es.wikipedia.org/wiki/Metropol_Parasol",
+            "en": "https://en.wikipedia.org/wiki/Metropol_Parasol"
+          },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3929799,-5.9921608&travelmode=walking"
+        }
+      },
+
+      "mercado-triana": {
+        "id": "mercado-triana",
+        "name": "Mercado de Triana",
+        "coords": [37.3857102, -6.0036109],
+        "coordsSource": "places_api",
+        "address": "C. San Jorge, 6, 41010 Sevilla",
+        "category": "food",
+        "hours": {
+          "default": [["09:00", "23:59"]],
+          "byDay": { "sun": [["09:00", "17:00"]] },
+          "closedDays": [],
+          "note": {
+            "es": "LOS DOMINGOS CIERRA A LAS 17:00. Este es el conflicto deliberado del fixture",
+            "en": "CLOSES AT 17:00 ON SUNDAYS. This is the deliberate conflict in the fixture"
+          }
+        },
+        "cost": { "adult": 0, "child": 0, "currency": "EUR", "note": null },
+        "contact": { "phone": "+34674074099", "url": null },
+        "amenities": ["toilets", "cafe"],
+        "dog": { "allowed": "partial", "note": { "es": "Depende del puesto", "en": "Depends on the stall" }, "confidence": "unverified" },
+        "facts": [
+          {
+            "text": {
+              "es": "Mercado de abastos real, no de diseño. Pescado, marisco y puestos de tapear dentro",
+              "en": "A real working market, not a food court. Fish, shellfish and tapas stalls inside"
+            },
+            "confidence": "verified",
+            "source": "reseñas Google, 2026"
+          }
+        ],
+        "deep": {
+          "es": "Está construido literalmente encima del Castillo de San Jorge, sede de la Inquisición en Sevilla durante tres siglos. Los restos son visitables al lado, y la ironía de poner un mercado de abastos sobre el tribunal es difícil de superar.",
+          "en": "It is built literally on top of the Castillo de San Jorge, seat of the Inquisition in Seville for three centuries. The remains can be visited next door."
+        },
+        "links": {
+          "wikipedia": { "es": "https://es.wikipedia.org/wiki/Mercado_de_Triana", "en": null },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.3857102,-6.0036109&travelmode=walking"
+        }
+      },
+
+      "aeropuerto-svq": {
+        "id": "aeropuerto-svq",
+        "name": "Aeropuerto de Sevilla (SVQ)",
+        "coords": [37.4180, -5.8931],
+        "coordsSource": "geocoded",
+        "address": "Autovía A-4, km 532, 41020 Sevilla",
+        "category": "transport",
+        "hours": { "default": [["00:00", "23:59"]], "byDay": {}, "closedDays": [] },
+        "cost": { "adult": null, "child": null, "currency": "EUR", "note": null },
+        "contact": { "phone": null, "url": null },
+        "amenities": ["toilets", "cafe"],
+        "dog": { "allowed": "partial", "note": null, "confidence": "unverified" },
+        "facts": [],
+        "deep": { "es": null, "en": null },
+        "links": {
+          "wikipedia": { "es": null, "en": null },
+          "official": null,
+          "maps": "https://www.google.com/maps/dir/?api=1&destination=37.4180,-5.8931&travelmode=driving"
+        }
+      }
+    },
+
+    "days": [
+      {
+        "id": "d01",
+        "date": "2026-09-13",
+        "type": "explore",
+        "title": { "es": "Sevilla de una tirada", "en": "Seville in one go" },
+        "timezone": "Europe/Madrid",
+        "stay": "stay-casa",
+        "startTime": "09:15",
+        "intro": {
+          "es": "Un bucle a pie por el centro, del Alcázar a Triana, con la vuelta al coche por el río. Domingo de septiembre: sigue haciendo calor de verdad entre las 14:00 y las 18:00, así que las paradas con sombra están puestas a propósito en esa franja.",
+          "en": "A walking loop through the centre, from the Alcázar to Triana, returning to the car along the river. A Sunday in September: it is still genuinely hot between 14:00 and 18:00, so the shaded stops are deliberately placed in that window."
+        },
+        "waypoints": [
+          {
+            "id": "wp-01",
+            "place": "casa-bollullos",
+            "duration": 0,
+            "travelFrom": 0,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": null,
+            "notes": [
+              { "type": "info", "text": { "es": "Salida de casa", "en": "Leave home" } }
+            ]
+          },
+          {
+            "id": "wp-02",
+            "place": "parking-colon",
+            "duration": 15,
+            "travelFrom": 30,
+            "travelMode": "driving",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": null,
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "Plazas estrechas. Si vas con el coche grande, valora el Mercado del Arenal a 50 m",
+                  "en": "Tight spaces. With the big car, consider Mercado del Arenal 50 m away"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-03",
+            "place": "alcazar",
+            "duration": 105,
+            "travelFrom": 12,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": {
+              "type": "booking",
+              "time": "10:15",
+              "hard": true,
+              "label": { "es": "Entrada con hora asignada", "en": "Timed entry ticket" }
+            },
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "Llegada prevista 10:12 con la entrada a las 10:15. Sólo 3 minutos de margen: el banner ámbar debe salir ya al arrancar el día",
+                  "en": "Arrival 10:12 for a 10:15 slot. Only 3 minutes of slack: the amber banner should fire from the start of the day"
+                }
+              },
+              { "type": "dog", "text": { "es": "Leica no entra. Turno fuera", "en": "Leica cannot enter" } }
+            ]
+          },
+          {
+            "id": "wp-04",
+            "place": "catedral-giralda",
+            "duration": 75,
+            "travelFrom": 10,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": 10,
+            "anchor": null,
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "SEGUNDO CONFLICTO DELIBERADO. Llegada prevista 12:07 y los domingos no abre hasta las 14:30. El parche v2 lo deja sin arreglar a propósito: tras aplicarlo sigue llegando a las 11:52",
+                  "en": "SECOND DELIBERATE CONFLICT. Planned arrival 12:07, Sundays it does not open until 14:30. Patch v2 deliberately leaves it unfixed: after applying it, arrival is still 11:52"
+                }
+              },
+              {
+                "type": "info",
+                "text": {
+                  "es": "La Giralda se sube por rampas: 35 rampas y 17 escalones",
+                  "en": "The Giralda is climbed by ramps: 35 ramps and 17 steps"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-05",
+            "place": "santa-cruz",
+            "duration": 40,
+            "travelFrom": 5,
+            "travelMode": "walking",
+            "priority": "normal",
+            "dropRank": 4,
+            "anchor": null,
+            "notes": [
+              {
+                "type": "info",
+                "text": {
+                  "es": "Parada de prueba del GPS. Comprobad si el punto azul salta entre los callejones",
+                  "en": "GPS test stop. Check whether the blue dot jumps between the alleys"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-06",
+            "place": "venerables",
+            "duration": 35,
+            "travelFrom": 3,
+            "travelMode": "walking",
+            "priority": "optional",
+            "dropRank": 1,
+            "anchor": null,
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "Horario desconocido. El validador debe decir que no puede comprobarlo",
+                  "en": "Hours unknown. The validator must say it cannot check this"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-07",
+            "place": "plaza-espana",
+            "duration": 45,
+            "travelFrom": 18,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": 9,
+            "anchor": null,
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "Sin sombra en el centro. A esta hora, por los soportales",
+                  "en": "No shade in the middle. At this hour, stick to the arcades"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-08",
+            "place": "casa-pilatos",
+            "duration": 60,
+            "travelFrom": 20,
+            "travelMode": "walking",
+            "priority": "normal",
+            "dropRank": 3,
+            "anchor": null,
+            "notes": []
+          },
+          {
+            "id": "wp-09",
+            "place": "setas",
+            "duration": 45,
+            "travelFrom": 12,
+            "travelMode": "walking",
+            "priority": "normal",
+            "dropRank": 5,
+            "anchor": null,
+            "notes": []
+          },
+          {
+            "id": "wp-10",
+            "place": "mercado-triana",
+            "duration": 40,
+            "travelFrom": 22,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": 8,
+            "anchor": {
+              "type": "closing",
+              "time": "17:00",
+              "hard": true,
+              "label": { "es": "Cierra el mercado (domingo)", "en": "Market closes (Sunday)" }
+            },
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "CONFLICTO DELIBERADO. La llegada prevista es 18:27 y los domingos cierra a las 17:00. Si el validador no lo detecta, está roto",
+                  "en": "DELIBERATE CONFLICT. Planned arrival 18:27, Sunday closing 17:00. If the validator misses this, it is broken"
+                }
+              }
+            ]
+          },
+          {
+            "id": "wp-11",
+            "place": "parking-colon",
+            "duration": 10,
+            "travelFrom": 12,
+            "travelMode": "walking",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": {
+              "type": "departure",
+              "time": "19:30",
+              "hard": false,
+              "label": { "es": "Salida hacia casa", "en": "Depart for home" }
+            },
+            "notes": [
+              {
+                "type": "info",
+                "text": {
+                  "es": "Pagar en la máquina antes de bajar al coche",
+                  "en": "Pay at the machine before going down to the car"
+                }
+              }
+            ]
+          }
+        ]
+      },
+
+      {
+        "id": "d02",
+        "date": "2026-09-14",
+        "type": "transit",
+        "title": { "es": "Traslado al aeropuerto", "en": "Airport transfer" },
+        "timezone": "Europe/Madrid",
+        "stay": "stay-casa",
+        "startTime": "05:40",
+        "intro": {
+          "es": "Día sintético para probar la vista de cuenta atrás. No es un viaje real: sirve para comprobar que un día tipo transit no se pinta como una lista de paradas sino como un reloj.",
+          "en": "Synthetic day to exercise the countdown view. Not a real trip: it checks that a transit day renders as a clock, not a list of stops."
+        },
+        "waypoints": [
+          {
+            "id": "wp-t01",
+            "place": "casa-bollullos",
+            "duration": 0,
+            "travelFrom": 0,
+            "travelMode": "driving",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": {
+              "type": "departure",
+              "time": "05:40",
+              "hard": true,
+              "label": { "es": "Salir de casa", "en": "Leave home" }
+            },
+            "notes": []
+          },
+          {
+            "id": "wp-t02",
+            "place": "aeropuerto-svq",
+            "duration": 0,
+            "travelFrom": 35,
+            "travelMode": "driving",
+            "priority": "key",
+            "dropRank": null,
+            "anchor": {
+              "type": "transport",
+              "time": "07:20",
+              "hard": true,
+              "label": { "es": "Cierre de facturación", "en": "Check-in closes" }
+            },
+            "notes": [
+              {
+                "type": "warn",
+                "text": {
+                  "es": "El aviso aquí no debe ser «vas justo» sino «sal ya»",
+                  "en": "The warning here should not be 'you are tight' but 'leave now'"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

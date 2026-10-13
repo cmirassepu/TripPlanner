@@ -80,6 +80,8 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .tabs{display:flex;gap:.3rem;margin:.8rem 0 1rem;padding:.25rem;background:var(--card);border-radius:.7rem}
 .tabs button{flex:1;padding:.45rem 0;border-radius:.5rem;font-size:.85rem;font-weight:600;color:var(--muted)}
 .tabs button[aria-pressed=true]{background:var(--accent);color:var(--bg)}
+.filters{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+.filters .grow{flex:1}
 .group{margin:1.2rem 0 0;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .panel .ref{margin:.3rem 0;font-size:1.5rem;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums;user-select:all;-webkit-user-select:all}
 .chip.off{opacity:.3}

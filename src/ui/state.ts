@@ -19,6 +19,8 @@ export type Route =
   | { name: 'trip'; tripId: string }
   | { name: 'settings' };
 
+export type NearbyFilter = 'all' | 'see' | 'eat';
+
 /** Las tres vistas de un día. `plan` es la que sale por defecto. */
 export type DayTab = 'plan' | 'nearby' | 'bookings';
 
@@ -110,6 +112,8 @@ export interface AppState {
   storage: StorageStatus;
   alert: { level: AlertLevel; dismissedAt?: AlertLevel };
   clock: SimulatedClock;
+  /** Qué grupo de sitios enseña la pestaña de la zona. Se conserva al cambiar de día. */
+  nearby: NearbyFilter;
   /** Tamaño del texto, en % del normal. Todo el estilo va en `rem`. */
   textSize: number;
   /** Mensaje efímero de confirmación, tipo «deshecho». */

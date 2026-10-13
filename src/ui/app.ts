@@ -10,7 +10,15 @@
 import { openDb, savePlan, loadPlan, allPlans, saveJournal, loadJournal, type StoredPlan } from '../store/db.ts';
 import { storageStatus, requestPersistence } from '../store/install.ts';
 import { emptyJournal } from '../journal/types.ts';
-import { parseRoute, routeHash, neighbours, today, type AppState, type SimulatedClock } from './state.ts';
+import {
+  parseRoute,
+  routeHash,
+  neighbours,
+  today,
+  type AppState,
+  type SimulatedClock,
+  type NearbyFilter,
+} from './state.ts';
 import {
   libraryScreen,
   tripScreen,
@@ -47,6 +55,7 @@ async function boot(): Promise<void> {
     alert: { level: 'green' },
     clock: loadClock(),
     textSize: Number(localStorage.getItem(TEXT_SIZE_KEY)) || 100,
+    nearby: 'all',
     flash: null,
     updateReady: false,
   };
@@ -308,6 +317,11 @@ async function loadFile(picked: File): Promise<void> {
 
 async function act(action: string, el: HTMLElement): Promise<void> {
   switch (action) {
+    case 'nearby':
+      state.nearby = (el.dataset.filter as NearbyFilter) ?? 'all';
+      render();
+      break;
+
     case 'back':
       history.back();
       break;

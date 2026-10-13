@@ -6,7 +6,7 @@
 
 import type { TripPayload, Day, Place, Stay, Booking, Note } from '../model/types.ts';
 import type { AppState } from './state.ts';
-import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab } from './state.ts';
+import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab, type NearbyFilter } from './state.ts';
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
 import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
@@ -127,7 +127,7 @@ export function dayScreen(state: AppState): string {
 
   const body =
     route.tab === 'nearby'
-      ? nearbyBody(plan, route.tripId, day)
+      ? nearbyBody(plan, route.tripId, day, state.nearby)
       : route.tab === 'bookings'
         ? bookingsBody(plan, day)
         : planBody(state, plan, route.tripId, day);
@@ -173,6 +173,12 @@ function planBody(state: AppState, plan: TripPayload, tripId: string, day: Day):
 
 /* ── Por la zona ─────────────────────────────────────────────────────── */
 
+const NEARBY_FILTERS: ReadonlyArray<readonly [NearbyFilter, string]> = [
+  ['all', 'All'],
+  ['see', 'See and do'],
+  ['eat', 'Eat'],
+];
+
 /** Categorías que no son «sitios que ver»: ya salen en el plan o en las reservas. */
 const NOT_SIGHTS = new Set(['lodging', 'transport']);
 
@@ -180,7 +186,7 @@ const NOT_SIGHTS = new Set(['lodging', 'transport']);
  * Todo lo apuntado en la zona donde se duerme ese día, esté o no en el plan.
  * Es el plan B: si algo está cerrado, llueve o no apetece, aquí hay de dónde tirar.
  */
-function nearbyBody(plan: TripPayload, tripId: string, day: Day): string {
+function nearbyBody(plan: TripPayload, tripId: string, day: Day, filter: NearbyFilter): string {
   const area = plan.stays.find((st) => st.id === day.stay)?.area;
   const places = Object.values(plan.places).filter(
     (pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? ''),
@@ -199,7 +205,21 @@ function nearbyBody(plan: TripPayload, tripId: string, day: Day): string {
 
   const eat = places.filter((pl) => pl.category === 'food');
   const see = places.filter((pl) => pl.category !== 'food');
-  return `<p class="meta">${esc(area!)}</p>${group('See and do', see)}${group('Eat', eat)}`;
+
+  const chips = NEARBY_FILTERS.map(
+    ([key, label]) =>
+      `<button class="chip" data-act="nearby" data-filter="${key}" aria-pressed="${filter === key}">${label}</button>`,
+  ).join('');
+
+  // Con «All» se ven los dos grupos con su título; con un filtro, sólo la lista.
+  const lists =
+    filter === 'see'
+      ? `<ul class="days">${see.map(row).join('')}</ul>`
+      : filter === 'eat'
+        ? `<ul class="days">${eat.map(row).join('')}</ul>`
+        : group('See and do', see) + group('Eat', eat);
+
+  return `<div class="filters"><span class="meta grow">${esc(area!)}</span>${chips}</div>${lists}`;
 }
 
 /* ── Reservas ────────────────────────────────────────────────────────── */

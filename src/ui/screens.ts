@@ -581,11 +581,30 @@ function placeDetail(
     ${about ? `<p class="lead">${esc(about)}</p>` : ''}
     ${extra.after}
     ${placeFacts(place, day, lang)}
+    ${mapsLink(place)}
     ${
       fineprint.length
         ? `<details class="panel"><summary>Good to know · ${fineprint.length}</summary><ul>${fineprint.join('')}</ul></details>`
         : ''
     }`;
+}
+
+/**
+ * Enlace a Google Maps para leer reseñas y ver fotos. Necesita red, y se busca
+ * por nombre y zona, no por coordenadas: unas coordenadas abren un punto en el
+ * mapa, no la ficha del sitio.
+ */
+function mapsLink(place: Place): string {
+  // Un hueco genérico («comer por aquí») no es un sitio que buscar.
+  if (!place.links?.maps && !place.coords && !place.address && !place.area) return '';
+  const name = place.name.replace(/\s*\(.*?\)\s*/g, ' ').trim();
+  const url =
+    place.links?.maps ??
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      [name, place.area].filter(Boolean).join(', '),
+    )}`;
+  if (!/^https:\/\//.test(url)) return '';
+  return `<p><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Open in Google Maps</a></p>`;
 }
 
 /** Los datos de consulta rápida. Una fila sólo sale si hay algo que decir. */

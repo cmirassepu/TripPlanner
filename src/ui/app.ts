@@ -9,19 +9,17 @@
 
 import { openDb, savePlan, loadPlan, allPlans, saveJournal, loadJournal, type StoredPlan } from '../store/db.ts';
 import { storageStatus, requestPersistence } from '../store/install.ts';
-import { emptyJournal, type Journal } from '../journal/types.ts';
+import { emptyJournal } from '../journal/types.ts';
+import { parseRoute, today, type AppState, type SimulatedClock } from './state.ts';
 import {
-  arrive,
-  depart,
-  skip,
-  unmark,
-  improvise,
-  setFreeMode,
-  statusOf,
-} from '../journal/journal.ts';
-import { inferSkipReason } from '../journal/infer.ts';
-import { parseRoute, routeHash, today, nowMinutes, type AppState, type SimulatedClock } from './state.ts';
-import { libraryScreen, tripScreen, dayScreen, settingsScreen, type SpikeView } from './screens.ts';
+  libraryScreen,
+  tripScreen,
+  dayScreen,
+  stopScreen,
+  stayScreen,
+  settingsScreen,
+  type SpikeView,
+} from './screens.ts';
 import { writeProbe, verifyRanges, probeInfo, deleteProbe } from '../spike/opfs.ts';
 import type { TripFile } from '../model/types.ts';
 import { validateFile } from '../validate/validate.ts';
@@ -146,13 +144,16 @@ async function seed(): Promise<void> {
 
 /* ── Navegación y render ─────────────────────────────────────────────── */
 
+let shownHash: string | null = null;
+
 async function navigate(): Promise<void> {
+  const changed = location.hash !== shownHash;
+  shownHash = location.hash;
   state.route = parseRoute(location.hash);
   state.plans = await allPlans(db);
   state.storage = await storageStatus();
 
-  const tripId =
-    state.route.name === 'day' || state.route.name === 'trip' ? state.route.tripId : null;
+  const tripId = 'tripId' in state.route ? state.route.tripId : null;
 
   if (tripId) {
     const stored: StoredPlan | undefined = await loadPlan(db, tripId);
@@ -164,6 +165,9 @@ async function navigate(): Promise<void> {
   }
 
   render();
+  // `render` conserva el scroll para los repintados. Al cambiar de pantalla
+  // se empieza arriba: abrir una parada a media página la dejaría cortada.
+  if (changed) window.scrollTo({ top: 0 });
 }
 
 function render(): void {
@@ -175,7 +179,11 @@ function render(): void {
       ? settingsScreen(state, spike)
       : state.route.name === 'day'
         ? dayScreen(state)
-        : state.route.name === 'trip'
+        : state.route.name === 'stop'
+          ? stopScreen(state)
+          : state.route.name === 'stay'
+            ? stayScreen(state)
+            : state.route.name === 'trip'
           ? tripScreen(state)
           : libraryScreen(state);
 
@@ -251,74 +259,7 @@ async function loadFile(picked: File): Promise<void> {
 }
 
 async function act(action: string, el: HTMLElement): Promise<void> {
-  const journal = state.journal;
-  const plan = state.plan;
-  const wp = el.dataset.wp;
-  const route = state.route;
-  const day =
-    plan && route.name === 'day' ? plan.days.find((d) => d.id === route.dayId) ?? null : null;
-
-  const clockNow = (): (() => string) => {
-    const iso = `${today(state.clock)}T${pad(nowMinutes(state.clock))}:00`;
-    return () => new Date(iso).toISOString();
-  };
-
   switch (action) {
-    /* Registro (§5) */
-    case 'arrive':
-      if (journal && wp) await commit(arrive(journal, wp, clockNow()));
-      break;
-
-    case 'visited': {
-      if (!journal || !wp || !day) break;
-      const planned = day.waypoints.find((w) => w.id === wp)?.duration ?? 0;
-      const started = statusOf(journal, wp) === 'current' ? journal : arrive(journal, wp, clockNow());
-      await commit(depart(started, wp, planned, clockNow()));
-      break;
-    }
-
-    case 'skip': {
-      if (!journal || !wp || !plan || !day) break;
-      // §5.1 — el motivo se deduce, no se pregunta.
-      const reason = inferSkipReason(plan, day, wp, nowMinutes(state.clock), journal);
-      await commit(skip(journal, wp, reason, clockNow()));
-      break;
-    }
-
-    case 'unmark':
-      if (journal && wp) await commit(unmark(journal, wp));
-      break;
-
-    /* Avisos (§6.3) */
-    case 'drop': {
-      if (!journal || !plan || !day) break;
-      let next = journal;
-      for (const id of (el.dataset.ids ?? '').split(',').filter(Boolean)) {
-        next = skip(next, id, inferSkipReason(plan, day, id, nowMinutes(state.clock), next), clockNow());
-      }
-      await commit(next);
-      break;
-    }
-
-    case 'dismiss':
-      state.alert = { level: state.alert.level, dismissedAt: el.dataset.level as never };
-      render();
-      break;
-
-    /* Improvisación y modo libre (§7) */
-    case 'improvise': {
-      if (!journal || !day) break;
-      const name = prompt('What is it?');
-      if (!name) break;
-      const coords = await currentPosition();
-      await commit(improvise(journal, { dayId: day.id, name, coords }, clockNow()));
-      break;
-    }
-
-    case 'freemode':
-      if (journal && day) await commit(setFreeMode(journal, day.id, !isPressed(el)));
-      break;
-
     /* Ajustes */
     case 'persist':
       await requestPersistence();
@@ -344,16 +285,6 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       await seed();
       await navigate();
       break;
-
-    case 'wipe-journal': {
-      // Sólo el registro. El plan se queda: son almacenes distintos justamente
-      // para que se puedan tirar por separado (§2.5).
-      if (!confirm('Delete all your marks and notes? The plan is not touched.')) break;
-      for (const p of state.plans) await saveJournal(db, emptyJournal(p.tripId));
-      state.alert = { level: 'green' };
-      await navigate();
-      break;
-    }
 
     /* Spike (§8.4) */
     case 'spike-write':
@@ -392,33 +323,8 @@ async function act(action: string, el: HTMLElement): Promise<void> {
   }
 }
 
-/** Guarda el registro y repinta. El registro es lo único irreemplazable (§2.5). */
-async function commit(journal: Journal): Promise<void> {
-  state.journal = journal;
-  await saveJournal(db, journal);
-  render();
-}
-
-/**
- * §8.3 — la posición se pide al necesitarla, no con `watchPosition` continuo:
- * ocho horas de chip despierto se comen el móvil, y en un día de ruta el móvil
- * es también el billete y el mapa.
- */
-function currentPosition(): Promise<[number, number] | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve([p.coords.latitude, p.coords.longitude]),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  });
-}
-
-const isPressed = (el: HTMLElement) => el.getAttribute('aria-pressed') === 'true';
 const escapeText = (s: string) =>
   s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
-const pad = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 function loadClock(): SimulatedClock {
   try {

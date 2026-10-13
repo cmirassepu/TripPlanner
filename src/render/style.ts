@@ -99,6 +99,17 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .dayrow{display:flex;gap:.8rem;align-items:baseline;width:100%;text-align:left;background:var(--card);border-radius:.6rem;padding:.7rem .9rem}
 .dayrow b{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.8rem;min-width:3.5rem}
 .dayrow.today{outline:2px solid var(--accent)}
+.dayrow.past{opacity:.5}
+.dayrow .grow{flex:1}
+.dayrow .sub{display:block;color:var(--muted);font-size:.85em}
+.dayrow .flag{color:var(--warn);font-weight:700}
+.dayrow .go{color:var(--muted)}
+.nowline{display:flex;align-items:center;gap:.5rem;color:var(--accent);font-size:.75rem;font-weight:600}
+.nowline::after{content:"";flex:1;border-top:2px solid var(--accent)}
+.lead{font-size:.95rem;margin:.7rem 0}
+.photo{margin:0 0 .9rem}
+.photo img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:.7rem;background:var(--card)}
+.photo figcaption{margin:.3rem 0 0;font-size:.68rem;color:var(--muted)}
 
 .stop{transition:opacity .15s}
 .stop.done .when strong{color:var(--muted);text-decoration:line-through}
@@ -109,13 +120,16 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .acts button{padding:.35rem .8rem;border:1px solid var(--line);border-radius:2rem;font-size:.8rem;background:var(--bg)}
 .acts button[aria-pressed=true]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 
-.panel{background:var(--card);border-radius:.7rem;padding:1rem;margin:0 0 .8rem}
+.panel{background:var(--card);border-radius:.7rem;padding:1rem;margin:.8rem 0}
 .panel h3{margin:0 0 .5rem}
 .panel p{margin:.35rem 0;font-size:.9rem}
 .panel dl{display:grid;grid-template-columns:auto 1fr;gap:.3rem .8rem;margin:.6rem 0 0;font-size:.85rem}
 .panel dt{color:var(--muted)}
 .panel dd{margin:0;font-variant-numeric:tabular-nums}
 .panel a{color:var(--accent)}
+.panel ul{margin:.4rem 0 0;padding-left:1.1rem;font-size:.88rem}
+.panel li{margin:.35rem 0}
+details.panel summary{font-weight:600;cursor:pointer}
 a.chip{color:inherit;text-decoration:none}
 .btn{display:inline-block;padding:.55rem 1.1rem;border-radius:.5rem;background:var(--accent);color:var(--bg);font-weight:600;font-size:.9rem;margin:.5rem .4rem 0 0}
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink)}

@@ -72,6 +72,12 @@ export interface Place {
   dog?: DogPolicy | null;
   facts?: Fact[];
   deep?: Localized | null;
+  /**
+   * Una foto del sitio. `src` es un `data:` URI: va dentro del archivo de
+   * viaje para que funcione sin red. `credit` es obligatorio en la práctica
+   * (autor y licencia), porque las fotos libres lo exigen.
+   */
+  photo?: { src: string; credit?: string | null } | null;
   links?: {
     wikipedia?: Localized | null;
     official?: string | null;

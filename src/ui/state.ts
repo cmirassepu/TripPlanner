@@ -13,6 +13,8 @@ import { parseClock, type Minutes } from '../core/time.ts';
 export type Route =
   | { name: 'library' }
   | { name: 'day'; tripId: string; dayId: string }
+  | { name: 'stop'; tripId: string; dayId: string; waypointId: string }
+  | { name: 'stay'; tripId: string; dayId: string }
   | { name: 'trip'; tripId: string }
   | { name: 'settings' };
 
@@ -21,7 +23,12 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'settings') return { name: 'settings' };
   if (parts[0] === 'trip' && parts[1]) {
     if (parts[2] === 'day' && parts[3]) {
-      return { name: 'day', tripId: decodeURIComponent(parts[1]), dayId: parts[3] };
+      const tripId = decodeURIComponent(parts[1]);
+      if (parts[4] === 'stop' && parts[5]) {
+        return { name: 'stop', tripId, dayId: parts[3], waypointId: decodeURIComponent(parts[5]) };
+      }
+      if (parts[4] === 'stay') return { name: 'stay', tripId, dayId: parts[3] };
+      return { name: 'day', tripId, dayId: parts[3] };
     }
     return { name: 'trip', tripId: decodeURIComponent(parts[1]) };
   }
@@ -38,6 +45,10 @@ export function routeHash(route: Route): string {
       return `#/trip/${encodeURIComponent(route.tripId)}`;
     case 'day':
       return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}`;
+    case 'stop':
+      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/stop/${encodeURIComponent(route.waypointId)}`;
+    case 'stay':
+      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/stay`;
   }
 }
 

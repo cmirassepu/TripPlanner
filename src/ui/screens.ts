@@ -4,15 +4,13 @@
  * el bundle se cachea entero, así que cada kilobyte se paga en el aeropuerto.
  */
 
-import type { TripPayload, Day } from '../model/types.ts';
-import type { Journal } from '../journal/types.ts';
+import type { TripPayload, Day, Place } from '../model/types.ts';
 import type { AppState } from './state.ts';
 import { routeHash, today, nowMinutes } from './state.ts';
-import { computeSchedule } from '../core/schedule.ts';
+import { computeSchedule, type Schedule } from '../core/schedule.ts';
 import { formatClock, formatDuration } from '../core/time.ts';
-import { renderStop, esc, pick, longDate } from '../render/day.ts';
-import { statusOf, isFreeMode } from '../journal/journal.ts';
-import { alertFor } from '../journal/infer.ts';
+import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
+import { esc, pick, longDate } from '../render/day.ts';
 import { summarise, sortForLibrary } from '../library/library.ts';
 import { formatBytes, installHint } from '../store/install.ts';
 import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
@@ -47,16 +45,12 @@ export function libraryScreen(state: AppState): string {
     .map((s) => {
       const stored = summaries.find((x) => x.summary.title === s.title)!.stored;
       const label = { active: 'under way', upcoming: 'upcoming', finished: 'finished' }[s.status];
-      const pct = s.planned ? Math.round((s.visited / s.planned) * 100) : 0;
       return `<li><button class="trip" data-go="${esc(
         routeHash({ name: 'trip', tripId: stored.tripId }),
       )}">
         <span class="tag ${s.status === 'active' ? 'active' : ''}">${label}</span>
         <h3>${esc(s.title)}</h3>
-        <p class="meta">${esc(s.startDate)} → ${esc(s.endDate)} · ${s.days} days · ${
-          s.visited
-        }/${s.planned} stops</p>
-        <div class="progress"><i style="width:${pct}%"></i></div>
+        <p class="meta">${esc(s.startDate)} → ${esc(s.endDate)} · ${s.days} days</p>
       </button></li>`;
     })
     .join('');
@@ -108,165 +102,134 @@ export function tripScreen(state: AppState): string {
 
 /* ── Día ─────────────────────────────────────────────────────────────── */
 
+/**
+ * El día, en una línea por parada. Aquí sólo va lo que hace falta para actuar
+ * en la próxima hora: cuándo, dónde y el plazo que manda. El resto vive en la
+ * página de cada parada, a un toque.
+ *
+ * No se marca nada: la línea de «ahora» la mueve el reloj.
+ */
 export function dayScreen(state: AppState): string {
   const plan = state.plan;
-  const journal = state.journal;
   const route = state.route;
-  if (!plan || !journal || route.name !== 'day') {
-    return `<p class="empty">Day not found.</p>`;
-  }
-
+  if (!plan || route.name !== 'day') return NOT_FOUND;
   const day = plan.days.find((d) => d.id === route.dayId);
-  if (!day) return `<p class="empty">Day not found.</p>`;
+  if (!day) return NOT_FOUND;
 
   const lang = plan.primaryLanguage;
-  const secondary = plan.languages.find((l) => l !== lang) ?? null;
-  const now = nowMinutes(state.clock);
   // El reloj sólo dice algo el día en cuestión: mirar el 23 de diciembre desde
   // octubre no es ir seis horas tarde.
-  const isToday = day.date === today(state.clock);
-  const free = isFreeMode(journal, day.id);
+  const now = day.date === today(state.clock) ? nowMinutes(state.clock) : null;
   const intro = pick(day.intro, lang);
+  const schedule = computeSchedule(day);
+  const stay = plan.stays.find((st) => st.id === day.stay);
+
+  const rows: string[] = [];
+  let nowShown = now === null;
+  for (const stop of schedule.stops) {
+    if (!nowShown && stop.arrive > now!) {
+      rows.push(nowLine(now!));
+      nowShown = true;
+    }
+    rows.push(stopRow(plan, route.tripId, day, stop, now));
+  }
+  if (!nowShown && schedule.stops.length) rows.push(nowLine(now!));
 
   return `${installBanner(state)}
-    <div class="bar">
-      <a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
-        pick(plan.title, lang) ?? 'Trip',
-      )}</a>
-      <button class="chip" data-act="freemode" aria-pressed="${free}">Free mode</button>
-    </div>
+    <div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+      pick(plan.title, lang) ?? 'Trip',
+    )}</a></div>
     <p class="date">${esc(longDate(day.date, lang))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
-    ${intro ? `<p class="meta">${esc(intro)}</p>` : ''}
-    ${isToday ? alertBanner(state, plan, day, journal) : ''}
-    ${day.type === 'transit' ? transitPanel(plan, day, isToday ? now : null) : ''}
+    ${intro ? `<p class="lead">${esc(intro)}</p>` : ''}
+    ${deadlinePanel(plan, day, schedule, now)}
+    ${rows.length ? `<ul class="days">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}
     ${
-      day.waypoints.length
-        ? timelineBody(plan, day, journal, lang, secondary)
-        : '<p class="empty">Nothing planned yet.</p>'
-    }
-    <p><button class="btn ghost" data-act="improvise">+ Unplanned stop</button></p>
-    ${improvisedList(journal, day)}
-    ${stayPanel(plan, day)}`;
+      stay
+        ? `<ul class="days"><li><button class="dayrow" data-go="${esc(
+            routeHash({ name: 'stay', tripId: route.tripId, dayId: day.id }),
+          )}"><b>Tonight</b><span class="grow">${esc(stay.name)}</span><span class="go">›</span></button></li></ul>`
+        : ''
+    }`;
 }
 
-function alertBanner(state: AppState, plan: TripPayload, day: Day, journal: Journal): string {
-  const now = nowMinutes(state.clock);
-  const started = parseStart(day.startTime);
+const NOT_FOUND = `<p class="empty">Day not found.</p>`;
 
-  /**
-   * Si el día ya ha empezado y no hay ni una parada marcada, la app no sabe
-   * dónde estás: creería que quedan por hacer las nueve y gritaría que vas seis
-   * horas tarde. Eso es la regañina que prohíbe §2.6, y encima sobre un dato
-   * que no tiene. Se pide la única señal que falta en vez de inventarse una.
-   */
-  const anyMarked = day.waypoints.some((w) => statusOf(journal, w.id) !== 'pending');
-  if (!anyMarked && now > started) {
-    return `<div class="alert amber">
-      <p>Mark where you are and I will tell you if you are on time.</p>
-    </div>`;
-  }
+type Stop = Schedule['stops'][number];
 
-  const alert = alertFor(day, now, journal, plan, state.alert.level);
-  if (!alert || alert.level === 'green' || !alert.message) return '';
-  if (state.alert.dismissedAt && rank(alert.level) <= rank(state.alert.dismissedAt)) return '';
+const nowLine = (now: number) => `<li class="nowline">Now · ${esc(formatClock(now))}</li>`;
 
-  const fix =
-    alert.proposal && alert.proposal.drop.length && !alert.proposal.insufficient
-      ? `<button class="act" data-act="drop" data-ids="${esc(
-          alert.proposal.drop.map((w) => w.id).join(','),
-        )}">Skip them</button>`
+function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: number | null): string {
+  const w = stop.waypoint;
+  const place = plan.places[w.place];
+  const lang = plan.primaryLanguage;
+
+  const past = now !== null && stop.leave <= now;
+  const current = now !== null && stop.arrive <= now && now < stop.leave;
+  const flagged = (w.notes ?? []).some((n) => n.type === 'warn') || closedOnArrival(place, day, stop);
+
+  const sub = w.anchor
+    ? withTime(pick(w.anchor.label, lang) ?? w.anchor.type, w.anchor.time)
+    : w.duration >= 15
+      ? `until ${formatClock(stop.leave)}`
       : '';
 
-  return `<div class="alert ${alert.level}">
-    <p>${esc(alert.message)}</p>
-    ${fix}
-    <button class="act" data-act="dismiss" data-level="${alert.level}">OK</button>
-  </div>`;
+  return `<li><button class="dayrow ${past ? 'past' : ''} ${current ? 'today' : ''}" data-go="${esc(
+    routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id }),
+  )}">
+    <b>${esc(formatClock(stop.arrive))}</b>
+    <span class="grow">${esc(place?.name ?? w.place)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+    ${flagged ? '<span class="flag" aria-label="Has a warning">!</span>' : ''}
+    <span class="go">›</span>
+  </button></li>`;
 }
 
-const rank = (l: string) => ({ green: 0, amber: 1, red: 2 })[l] ?? 0;
-const parseStart = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+const closedOnArrival = (place: Place | undefined, day: Day, stop: Stop): boolean =>
+  !!place && isOpenAt(place.hours, day.date, stop.arrive).state === 'closed';
 
-function timelineBody(
-  plan: TripPayload,
-  day: Day,
-  journal: Journal,
-  lang: string,
-  secondary: string | null,
-): string {
-  const schedule = computeSchedule(day);
-
-  const stops = schedule.stops
-    .map((stop) => {
-      const status = statusOf(journal, stop.waypoint.id);
-      const cls =
-        status === 'visited' || status === 'partial'
-          ? 'done'
-          : status === 'skipped'
-            ? 'skipped'
-            : status === 'current'
-              ? 'current'
-              : '';
-
-      const actions = `<div class="acts">
-        ${button('arrive', stop.waypoint.id, 'Arrived', status === 'current')}
-        ${button('visited', stop.waypoint.id, 'Done', status === 'visited' || status === 'partial')}
-        ${button('skip', stop.waypoint.id, 'Skip', status === 'skipped')}
-        ${status !== 'pending' ? button('unmark', stop.waypoint.id, 'Undo', false) : ''}
-      </div>`;
-
-      return renderStop(plan, day, stop.waypoint, stop.arrive, stop.leave, lang, secondary, {
-        status: cls,
-        actions,
-      });
-    })
-    .join('\n');
-
-  return `<ol class="timeline">${stops}</ol>`;
-}
-
-function button(act: string, id: string, label: string, pressed: boolean): string {
-  return `<button data-act="${act}" data-wp="${esc(id)}" aria-pressed="${pressed}">${label}</button>`;
-}
+/** Muchas etiquetas ya dicen la hora; repetirla detrás sólo mete ruido. */
+const withTime = (label: string, time: string) => (label.includes(time) ? label : `${label} · ${time}`);
 
 /**
- * §4.5 — un día `transit` es un reloj además de una lista: arriba el próximo
- * plazo, debajo la línea de tiempo completa, porque la reserva, los asientos y
- * los avisos viven en las notas de cada parada.
+ * El plazo que manda. Sólo cuentan los que se pueden perder: la hora de
+ * entrada a un hotel no es uno de ellos.
  *
- * `now` es `null` si el día no es hoy: entonces no hay cuenta atrás, sólo la
- * hora que manda.
+ * Un día `transit` es un reloj (§4.5), así que el plazo va en grande y con
+ * cuenta atrás. En los demás días es una franja discreta.
  */
-function transitPanel(plan: TripPayload, day: Day, now: number | null): string {
+function deadlinePanel(plan: TripPayload, day: Day, schedule: Schedule, now: number | null): string {
   const lang = plan.primaryLanguage;
-  const schedule = computeSchedule(day);
-
-  // Sólo cuentan los plazos. La hora de entrada al hotel no se puede perder.
   const deadlines = schedule.stops.filter(
     (s) => s.waypoint.anchor && s.waypoint.anchor.type !== 'opening',
   );
   if (!deadlines.length) return '';
 
-  const label = (s: (typeof deadlines)[number]) =>
+  const label = (s: Stop) =>
     pick(s.waypoint.anchor!.label, lang) ?? plan.places[s.waypoint.place]?.name ?? s.waypoint.place;
+  const next = now === null ? deadlines[0] : deadlines.find((s) => parseAnchor(s) > now);
+
+  if (day.type !== 'transit') {
+    if (!next) return '';
+    const at = parseAnchor(next);
+    const left = now === null ? '' : ` · ${formatDuration(at - now)} left`;
+    return `<div class="alert amber"><p>${esc(withTime(label(next), next.waypoint.anchor!.time))}${esc(left)}</p></div>`;
+  }
+
   const big = (text: string) =>
     `<h1 style="font-size:3rem;font-variant-numeric:tabular-nums;margin:.2rem 0">${esc(text)}</h1>`;
 
-  if (now === null) {
-    const first = deadlines[0];
-    return `<div class="panel">
-      <p class="meta">${esc(label(first))}</p>
-      ${big(first.waypoint.anchor!.time)}
-      <p class="verdict ok">The plan starts at ${esc(day.startTime)}</p>
-    </div>`;
-  }
-
-  const next = deadlines.find((s) => parseAnchor(s) > now);
   if (!next) {
     return `<div class="panel">
       <p class="meta">${esc(label(deadlines[deadlines.length - 1]))}</p>
       <p class="verdict ok">No deadlines left today.</p>
+    </div>`;
+  }
+
+  if (now === null) {
+    return `<div class="panel">
+      <p class="meta">${esc(label(next))}</p>
+      ${big(next.waypoint.anchor!.time)}
+      <p class="verdict ok">The plan starts at ${esc(day.startTime)}</p>
     </div>`;
   }
 
@@ -280,47 +243,158 @@ function transitPanel(plan: TripPayload, day: Day, now: number | null): string {
   </div>`;
 }
 
-/** Dónde se duerme esa noche. En un día libre es lo único seguro que hay. */
-function stayPanel(plan: TripPayload, day: Day): string {
-  const stay = plan.stays.find((s) => s.id === day.stay);
-  if (!stay) return '';
-
-  const lang = plan.primaryLanguage;
-  const place = stay.place ? plan.places[stay.place] : undefined;
-  const phone = place?.contact?.phone;
-  const notes = pick(stay.notes, lang);
-  const facts = (place?.facts ?? []).map((f) => `<p>${esc(pick(f.text, lang) ?? '')}</p>`).join('');
-
-  return `<div class="panel">
-    <p class="meta">Tonight</p>
-    <h3>${esc(stay.name)}</h3>
-    <dl>
-      ${place?.address ? `<dt>Address</dt><dd>${esc(place.address)}</dd>` : ''}
-      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
-      ${stay.confirmation ? `<dt>Booking</dt><dd>${esc(stay.confirmation)}</dd>` : ''}
-      <dt>Dates</dt><dd>${esc(shortDate(stay.from))} → ${esc(shortDate(stay.to))}</dd>
-    </dl>
-    ${notes ? `<p>${esc(notes)}</p>` : ''}
-    ${facts}
-  </div>`;
-}
-
 const parseAnchor = (s: { waypoint: { anchor?: { time: string } | null } }): number => {
   const t = s.waypoint.anchor?.time ?? '00:00';
   return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 };
 
-function improvisedList(journal: Journal, day: Day): string {
-  const items = journal.improvised.filter((i) => i.dayId === day.id);
-  if (!items.length) return '';
-  return `<ul class="days">${items
-    .map(
-      (i) =>
-        `<li class="dayrow"><b>${esc(i.at.slice(11, 16))}</b><span>${esc(i.name)}${
-          i.note ? `<span class="alt"> · ${esc(i.note)}</span>` : ''
-        }</span></li>`,
-    )
-    .join('')}</ul>`;
+/* ── Parada ──────────────────────────────────────────────────────────── */
+
+/** Todo lo que se sabe de una parada: avisos arriba, datos, y la letra pequeña plegada. */
+export function stopScreen(state: AppState): string {
+  const plan = state.plan;
+  const route = state.route;
+  if (!plan || route.name !== 'stop') return NOT_FOUND;
+  const day = plan.days.find((d) => d.id === route.dayId);
+  const stop = day && computeSchedule(day).stops.find((s) => s.waypoint.id === route.waypointId);
+  if (!day || !stop) return NOT_FOUND;
+
+  const lang = plan.primaryLanguage;
+  const w = stop.waypoint;
+  const place = plan.places[w.place];
+  const back = `<div class="bar"><a class="back" href="${esc(
+    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id }),
+  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a></div>`;
+  if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
+
+  const when =
+    stop.leave > stop.arrive
+      ? `${formatClock(stop.arrive)}–${formatClock(stop.leave)}`
+      : formatClock(stop.arrive);
+  const travel = w.travelFrom > 0 ? ` · ${w.travelFrom} min ${w.travelMode ?? 'walking'} to get here` : '';
+
+  const anchor = w.anchor
+    ? `<p class="anchor ${w.anchor.hard ? 'hard' : 'soft'}">${esc(
+        withTime(pick(w.anchor.label, lang) ?? w.anchor.type, w.anchor.time),
+      )}</p>`
+    : '';
+
+  const verdict = isOpenAt(place.hours, day.date, stop.arrive);
+  let conflict = '';
+  if (verdict.state === 'closed') {
+    const windows = verdict.windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed all day';
+    conflict = `<p class="conflict">${
+      whyClosed(verdict.windows, stop.arrive) === 'too-early'
+        ? `You arrive at ${esc(formatClock(stop.arrive))} and it does not open until ${esc(windows)}`
+        : `You arrive at ${esc(formatClock(stop.arrive))} and it closes ${esc(windows)}`
+    }</p>`;
+  }
+
+  const notes = w.notes ?? [];
+  const warnings = notes
+    .filter((n) => n.type === 'warn')
+    .map((n) => `<p class="verdict">${esc(pick(n.text, lang) ?? '')}</p>`)
+    .join('');
+
+  const about = pick(place.deep, lang);
+
+  const fineprint = [
+    ...notes.filter((n) => n.type !== 'warn').map((n) => `<li>${esc(pick(n.text, lang) ?? '')}</li>`),
+    ...(place.facts ?? []).map(
+      (f) =>
+        `<li>${esc(pick(f.text, lang) ?? '')}${
+          f.confidence === 'unverified'
+            ? '<span class="badge">unverified</span>'
+            : f.source
+              ? `<span class="src">${esc(f.source)}</span>`
+              : ''
+        }</li>`,
+    ),
+  ];
+
+  // Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red.
+  const photo = place.photo?.src.startsWith('data:image/')
+    ? `<figure class="photo"><img src="${esc(place.photo.src)}" alt="">${
+        place.photo.credit ? `<figcaption>${esc(place.photo.credit)}</figcaption>` : ''
+      }</figure>`
+    : '';
+
+  return `${back}
+    ${photo}
+    <h1>${esc(place.name)}</h1>
+    ${place.nameLocal && place.nameLocal !== place.name ? `<p class="lead">${esc(place.nameLocal)}</p>` : ''}
+    <p class="meta">${esc(when)}${esc(travel)}</p>
+    ${anchor}
+    ${conflict}
+    ${warnings}
+    ${about ? `<p class="lead">${esc(about)}</p>` : ''}
+    ${placeFacts(place, day, lang)}
+    ${
+      fineprint.length
+        ? `<details class="panel"><summary>Good to know · ${fineprint.length}</summary><ul>${fineprint.join('')}</ul></details>`
+        : ''
+    }`;
+}
+
+/** Los datos de consulta rápida. Una fila sólo sale si hay algo que decir. */
+function placeFacts(place: Place, day: Day, lang: string): string {
+  const rows: string[] = [];
+
+  const windows = windowsFor(place.hours, day.date);
+  const allDay = windows?.length === 1 && windows[0][0] === '00:00' && windows[0][1] >= '23:59';
+  if (!windows) rows.push(`<dt>Open today</dt><dd>unknown</dd>`);
+  else if (!allDay) {
+    rows.push(`<dt>Open today</dt><dd>${esc(windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed')}</dd>`);
+  }
+
+  const cost = place.cost;
+  if (cost && (cost.adult !== null || cost.child !== null)) {
+    const money = (n: number) => `${cost.currency} ${n.toLocaleString('en')}`;
+    const parts = [
+      cost.adult !== null ? `${cost.adult === 0 ? 'free' : money(cost.adult)} adult` : '',
+      cost.child !== null ? `${cost.child === 0 ? 'free' : money(cost.child)} child` : '',
+    ].filter(Boolean);
+    rows.push(`<dt>Price</dt><dd>${esc(parts.join(' · '))}</dd>`);
+  }
+  const costNote = pick(cost?.note, lang);
+
+  if (place.address) rows.push(`<dt>Address</dt><dd>${esc(place.address)}</dd>`);
+  if (place.addressLocal) rows.push(`<dt></dt><dd>${esc(place.addressLocal)}</dd>`);
+  const phone = place.contact?.phone;
+  if (phone) rows.push(`<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>`);
+
+  if (!rows.length && !costNote) return '';
+  return `<div class="panel"><dl>${rows.join('')}</dl>${costNote ? `<p class="meta">${esc(costNote)}</p>` : ''}</div>`;
+}
+
+/* ── Alojamiento ─────────────────────────────────────────────────────── */
+
+export function stayScreen(state: AppState): string {
+  const plan = state.plan;
+  const route = state.route;
+  if (!plan || route.name !== 'stay') return NOT_FOUND;
+  const day = plan.days.find((d) => d.id === route.dayId);
+  const stay = day && plan.stays.find((s) => s.id === day.stay);
+  if (!day || !stay) return NOT_FOUND;
+
+  const lang = plan.primaryLanguage;
+  const place = stay.place ? plan.places[stay.place] : undefined;
+  const phone = place?.contact?.phone;
+  const notes = pick(stay.notes, lang);
+  const facts = (place?.facts ?? []).map((f) => `<li>${esc(pick(f.text, lang) ?? '')}</li>`).join('');
+
+  return `<div class="bar"><a class="back" href="${esc(
+    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id }),
+  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a></div>
+    <h1>${esc(stay.name)}</h1>
+    <p class="meta">${esc(shortDate(stay.from))} → ${esc(shortDate(stay.to))}</p>
+    <div class="panel"><dl>
+      ${place?.address ? `<dt>Address</dt><dd>${esc(place.address)}</dd>` : ''}
+      ${place?.addressLocal ? `<dt></dt><dd>${esc(place.addressLocal)}</dd>` : ''}
+      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
+      ${stay.confirmation ? `<dt>Booking</dt><dd>${esc(stay.confirmation)}</dd>` : ''}
+    </dl></div>
+    ${notes || facts ? `<div class="panel">${notes ? `<p>${esc(notes)}</p>` : ''}${facts ? `<ul>${facts}</ul>` : ''}</div>` : ''}`;
 }
 
 /* ── Ajustes y spike (§8.4, §12.3) ───────────────────────────────────── */
@@ -404,9 +478,7 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
 
   <div class="panel">
     <h3>Data</h3>
-    <p class="meta">Deleting your record leaves the plan untouched: they are stored separately.</p>
     <button class="btn ghost" data-act="seed">Reload the sample trip</button>
-    <button class="btn ghost" data-act="wipe-journal">Delete my record</button>
   </div>`;
 }
 

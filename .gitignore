@@ -10,3 +10,10 @@ web/sw.js
 web/icon-*.png
 web/data/
 web/meta.json
+
+# Viajes reales: llevan direcciones, localizadores y documentos, y el repo es
+# público. Viven en iCloud Drive y se cargan en el teléfono, nunca aquí.
+private/
+*.private.json
+*tailandia*
+*thailand*

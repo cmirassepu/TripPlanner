@@ -25,7 +25,7 @@ export const TOKENS = `
 /** Estilos del día: los usa igual el HTML exportado que la pantalla del día. */
 export const DAY_STYLE = `
 *{box-sizing:border-box}
-body{margin:0;padding:1.25rem;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;max-width:44rem;margin-inline:auto;-webkit-text-size-adjust:100%}
+body{margin:0;padding:1.25rem;background:var(--bg);color:var(--ink);font:1rem/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;max-width:44rem;margin-inline:auto;-webkit-text-size-adjust:100%}
 h1{font-size:1.7rem;line-height:1.2;margin:.2rem 0}
 h2.alt{font-size:1.05rem;font-weight:500;color:var(--muted);margin:.1rem 0 0}
 h3{font-size:1.1rem;margin:0 0 .15rem}

@@ -28,6 +28,7 @@ import { validateFile } from '../validate/validate.ts';
 
 const CLOCK_KEY = 'guia-viaje:clock';
 const SPIKE_KEY = 'guia-viaje:spike-started';
+const TEXT_SIZE_KEY = 'guia-viaje:text-size';
 
 let db: IDBDatabase;
 let state: AppState;
@@ -46,9 +47,12 @@ async function boot(): Promise<void> {
     storage: await storageStatus(),
     alert: { level: 'green' },
     clock: loadClock(),
+    textSize: Number(localStorage.getItem(TEXT_SIZE_KEY)) || 100,
     flash: null,
     updateReady: false,
   };
+
+  applyTextSize();
 
   // Sin datos no hay nada que enseñar, y la primera vez que se abre esto es en
   // el sofá, no en el aeropuerto: se siembra el viaje de prueba.
@@ -321,6 +325,13 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       await navigate();
       break;
 
+    case 'text-size':
+      state.textSize = Number(el.dataset.size) || 100;
+      localStorage.setItem(TEXT_SIZE_KEY, String(state.textSize));
+      applyTextSize();
+      render();
+      break;
+
     case 'clock-reset':
       setClock({ date: null, time: null });
       break;
@@ -415,6 +426,10 @@ function loadClock(): SimulatedClock {
   } catch {
     return { date: null, time: null };
   }
+}
+
+function applyTextSize(): void {
+  document.documentElement.style.fontSize = `${state.textSize}%`;
 }
 
 function setClock(clock: SimulatedClock): void {

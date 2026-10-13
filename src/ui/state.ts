@@ -62,6 +62,8 @@ export interface AppState {
   storage: StorageStatus;
   alert: { level: AlertLevel; dismissedAt?: AlertLevel };
   clock: SimulatedClock;
+  /** Tamaño del texto, en % del normal. Todo el estilo va en `rem`. */
+  textSize: number;
   /** Mensaje efímero de confirmación, tipo «deshecho». */
   flash: string | null;
   /**

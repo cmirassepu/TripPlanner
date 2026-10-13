@@ -325,6 +325,13 @@ function improvisedList(journal: Journal, day: Day): string {
 
 /* ── Ajustes y spike (§8.4, §12.3) ───────────────────────────────────── */
 
+export const TEXT_SIZES: ReadonlyArray<readonly [number, string]> = [
+  [90, 'Small'],
+  [100, 'Normal'],
+  [115, 'Large'],
+  [130, 'Extra large'],
+];
+
 export interface SpikeView {
   info: ProbeInfo;
   ranges: ProbeResult | null;
@@ -338,6 +345,14 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
   const tone = v.startsWith('PASSED') ? 'ok' : v.includes('refused') || v.includes('fails') ? 'bad' : '';
 
   return `<div class="bar"><a class="back" href="#/">‹ Trips</a><h1>Settings</h1></div>
+
+  <div class="panel">
+    <h3>Text size</h3>
+    <div class="acts">${TEXT_SIZES.map(
+      ([size, label]) =>
+        `<button data-act="text-size" data-size="${size}" aria-pressed="${state.textSize === size}">${label}</button>`,
+    ).join('')}</div>
+  </div>
 
   <div class="panel">
     <h3>Storage</h3>

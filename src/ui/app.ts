@@ -56,6 +56,8 @@ async function boot(): Promise<void> {
     clock: loadClock(),
     textSize: Number(localStorage.getItem(TEXT_SIZE_KEY)) || 100,
     nearby: 'all',
+    nearbySort: 'az',
+    position: null,
     flash: null,
     updateReady: false,
   };
@@ -322,6 +324,26 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       render();
       break;
 
+    case 'nearby-sort': {
+      if (el.dataset.sort !== 'near') {
+        state.nearbySort = 'az';
+        render();
+        break;
+      }
+      // Una lectura por toque, no un seguimiento continuo (§8.3): volver a
+      // tocar «Nearest» la refresca.
+      const position = await currentPosition();
+      if (position) {
+        state.position = position;
+        state.nearbySort = 'near';
+        state.flash = null;
+      } else {
+        state.flash = 'Location not available. Check that the app is allowed to use it.';
+      }
+      render();
+      break;
+    }
+
     case 'back':
       history.back();
       break;
@@ -391,6 +413,22 @@ async function act(action: string, el: HTMLElement): Promise<void> {
 
 const escapeText = (s: string) =>
   s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+
+/**
+ * §8.3 — la posición se pide al necesitarla, no con `watchPosition` continuo:
+ * ocho horas de chip despierto se comen el móvil, y en un día de ruta el móvil
+ * es también el billete y el mapa.
+ */
+function currentPosition(): Promise<[number, number] | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve([p.coords.latitude, p.coords.longitude]),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 },
+    );
+  });
+}
 
 function loadClock(): SimulatedClock {
   try {

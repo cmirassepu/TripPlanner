@@ -10,6 +10,7 @@ import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab, type
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
 import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
+import { haversine, formatDistance } from '../core/geo.ts';
 import { esc, pick, longDate } from '../render/day.ts';
 import { summarise, sortForLibrary } from '../library/library.ts';
 import { formatBytes, installHint } from '../store/install.ts';
@@ -127,7 +128,7 @@ export function dayScreen(state: AppState): string {
 
   const body =
     route.tab === 'nearby'
-      ? nearbyBody(plan, route.tripId, day, state.nearby)
+      ? nearbyBody(state, plan, route.tripId, day)
       : route.tab === 'bookings'
         ? bookingsBody(plan, day)
         : planBody(state, plan, route.tripId, day);
@@ -186,16 +187,34 @@ const NOT_SIGHTS = new Set(['lodging', 'transport']);
  * Todo lo apuntado en la zona donde se duerme ese día, esté o no en el plan.
  * Es el plan B: si algo está cerrado, llueve o no apetece, aquí hay de dónde tirar.
  */
-function nearbyBody(plan: TripPayload, tripId: string, day: Day, filter: NearbyFilter): string {
+function nearbyBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
+  const filter: NearbyFilter = state.nearby;
+  const here = state.nearbySort === 'near' ? state.position : null;
+  const metres = (pl: Place) => (here && pl.coords ? haversine(here, pl.coords) : null);
+
   const area = plan.stays.find((st) => st.id === day.stay)?.area;
-  const places = Object.values(plan.places).filter(
-    (pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? ''),
-  );
+  const places = Object.values(plan.places)
+    .filter((pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? ''))
+    // Por cercanía si hay posición; los sitios sin coordenadas, al final. Si no, alfabético.
+    .sort((a, b) => {
+      const da = metres(a);
+      const db = metres(b);
+      if (da !== null && db !== null) return da - db;
+      if (da !== null || db !== null) return da !== null ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
   if (!places.length) return '<p class="empty">No places listed for this area yet.</p>';
 
   const row = (pl: Place) => {
     const planned = plan.days.find((d) => d.waypoints.some((w) => w.place === pl.id));
-    const sub = [pl.category, planned ? `planned ${shortDate(planned.date)}` : ''].filter(Boolean).join(' · ');
+    const away = metres(pl);
+    const sub = [
+      away !== null ? formatDistance(away) : here ? 'distance unknown' : '',
+      pl.category,
+      planned ? `planned ${shortDate(planned.date)}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
     return `<li><button class="dayrow" data-go="${esc(
       routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }),
     )}"><span class="grow">${esc(pl.name)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span><span class="go">›</span></button></li>`;
@@ -219,7 +238,14 @@ function nearbyBody(plan: TripPayload, tripId: string, day: Day, filter: NearbyF
         ? `<ul class="days">${eat.map(row).join('')}</ul>`
         : group('See and do', see) + group('Eat', eat);
 
-  return `<div class="filters"><span class="meta grow">${esc(area!)}</span>${chips}</div>${lists}`;
+  const sort = (key: 'az' | 'near', label: string) =>
+    `<button class="chip" data-act="nearby-sort" data-sort="${key}" aria-pressed="${
+      state.nearbySort === key
+    }">${label}</button>`;
+
+  return `<div class="filters"><span class="meta grow">${esc(area!)}</span>${chips}</div>
+    <div class="filters"><span class="meta grow">Sort</span>${sort('az', 'A–Z')}${sort('near', 'Nearest')}</div>
+    ${lists}`;
 }
 
 /* ── Reservas ────────────────────────────────────────────────────────── */

@@ -3,7 +3,7 @@
  * navegador sólo aporta el hash y el reloj.
  */
 
-import type { TripPayload } from '../model/types.ts';
+import type { TripPayload, Coords } from '../model/types.ts';
 import type { Journal } from '../journal/types.ts';
 import type { StoredPlan } from '../store/db.ts';
 import type { AlertLevel } from '../core/alerts.ts';
@@ -114,6 +114,9 @@ export interface AppState {
   clock: SimulatedClock;
   /** Qué grupo de sitios enseña la pestaña de la zona. Se conserva al cambiar de día. */
   nearby: NearbyFilter;
+  /** Orden de esa lista, y la posición leída al pedir «los más cercanos». */
+  nearbySort: 'az' | 'near';
+  position: Coords | null;
   /** Tamaño del texto, en % del normal. Todo el estilo va en `rem`. */
   textSize: number;
   /** Mensaje efímero de confirmación, tipo «deshecho». */

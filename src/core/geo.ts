@@ -75,5 +75,11 @@ export function nearestNeighbour(point: Coords, others: Coords[]): number | null
   return Math.min(...others.map((o) => haversine(point, o)));
 }
 
+/** Distancia para leer de un vistazo: «450 m» o «1.2 km». */
+export function formatDistance(metres: number): string {
+  if (metres < 1000) return `${Math.round(metres / 10) * 10} m`;
+  return `${(metres / 1000).toFixed(metres < 10_000 ? 1 : 0)} km`;
+}
+
 /** Umbral de sospecha para coordenadas sueltas, en metros. */
 export const STRAY_COORD_THRESHOLD = 50_000;

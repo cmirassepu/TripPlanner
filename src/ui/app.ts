@@ -184,6 +184,9 @@ function render(): void {
 function onClick(event: Event): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act],[data-go]');
   if (!target) return;
+  // Los campos se atienden en `change`. Cancelar su clic impediría que se
+  // abriera el selector de archivos, o el de fecha.
+  if (target instanceof HTMLInputElement) return;
 
   const go = target.dataset.go;
   if (go) {

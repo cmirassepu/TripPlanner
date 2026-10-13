@@ -76,6 +76,8 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .chip{padding:.3rem .7rem;border:1px solid var(--line);border-radius:2rem;font-size:.8rem;background:var(--card)}
 .chip[aria-pressed=true]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 .back{color:var(--accent);font-size:.9rem}
+.back.grow{flex:1}
+.chip.off{opacity:.3}
 
 .install{position:sticky;top:0;z-index:10;margin:0 0 1rem;padding:.7rem .9rem;background:var(--warn-bg);color:var(--warn);border-radius:.6rem;font-size:.85rem;line-height:1.4}
 .install strong{display:block;margin-bottom:.15rem}

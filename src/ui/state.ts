@@ -53,6 +53,30 @@ export function routeHash(route: Route): string {
 }
 
 /**
+ * La pantalla anterior y la siguiente a la que se está viendo: el día de al
+ * lado, o la parada de al lado dentro del mismo día. `null` en los extremos y
+ * en las pantallas que no tienen vecinas.
+ */
+export function neighbours(plan: TripPayload, route: Route): { prev: Route | null; next: Route | null } {
+  if (route.name === 'day') {
+    const i = plan.days.findIndex((d) => d.id === route.dayId);
+    const at = (j: number): Route | null =>
+      i >= 0 && plan.days[j] ? { name: 'day', tripId: route.tripId, dayId: plan.days[j].id } : null;
+    return { prev: at(i - 1), next: at(i + 1) };
+  }
+
+  if (route.name === 'stop') {
+    const stops = plan.days.find((d) => d.id === route.dayId)?.waypoints ?? [];
+    const i = stops.findIndex((w) => w.id === route.waypointId);
+    const at = (j: number): Route | null =>
+      i >= 0 && stops[j] ? { ...route, waypointId: stops[j].id } : null;
+    return { prev: at(i - 1), next: at(i + 1) };
+  }
+
+  return { prev: null, next: null };
+}
+
+/**
  * Reloj simulado. §14 paso 4 pide que los avisos sean simulables cambiando el
  * reloj, y sin esto la app es inútil fuera de las fechas del viaje: hoy es
  * julio y el fixture es de septiembre, así que todo saldría pendiente y en

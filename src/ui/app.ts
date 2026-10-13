@@ -10,7 +10,7 @@
 import { openDb, savePlan, loadPlan, allPlans, saveJournal, loadJournal, type StoredPlan } from '../store/db.ts';
 import { storageStatus, requestPersistence } from '../store/install.ts';
 import { emptyJournal } from '../journal/types.ts';
-import { parseRoute, today, type AppState, type SimulatedClock } from './state.ts';
+import { parseRoute, routeHash, neighbours, today, type AppState, type SimulatedClock } from './state.ts';
 import {
   libraryScreen,
   tripScreen,
@@ -63,6 +63,8 @@ async function boot(): Promise<void> {
   addEventListener('hashchange', () => void navigate());
   document.addEventListener('click', onClick);
   document.addEventListener('change', onChange);
+  document.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('touchend', onTouchEnd, { passive: true });
 
   await navigate();
 
@@ -194,11 +196,18 @@ function render(): void {
 /* ── Eventos ─────────────────────────────────────────────────────────── */
 
 function onClick(event: Event): void {
-  const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act],[data-go]');
+  const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act],[data-go],[data-swap]');
   if (!target) return;
   // Los campos se atienden en `change`. Cancelar su clic impediría que se
   // abriera el selector de archivos, o el de fecha.
   if (target instanceof HTMLInputElement) return;
+
+  // Pasar al día o a la parada de al lado no apila historial: sustituye.
+  if (target.dataset.swap) {
+    event.preventDefault();
+    swap(target.dataset.swap);
+    return;
+  }
 
   const go = target.dataset.go;
   if (go) {
@@ -210,6 +219,42 @@ function onClick(event: Event): void {
 
   event.preventDefault();
   void act(target.dataset.act!, target);
+}
+
+/* ── Deslizar ────────────────────────────────────────────────────────── */
+
+/** Ancho mínimo del gesto, y margen del borde que se deja al «atrás» de iOS. */
+const SWIPE_MIN = 60;
+const EDGE = 24;
+
+let touchStart: { x: number; y: number } | null = null;
+
+function onTouchStart(event: TouchEvent): void {
+  const t = event.touches[0];
+  const fromEdge = t.clientX < EDGE || t.clientX > innerWidth - EDGE;
+  touchStart = event.touches.length === 1 && !fromEdge ? { x: t.clientX, y: t.clientY } : null;
+}
+
+function onTouchEnd(event: TouchEvent): void {
+  const from = touchStart;
+  touchStart = null;
+  if (!from || !state.plan) return;
+
+  const t = event.changedTouches[0];
+  const dx = t.clientX - from.x;
+  const dy = t.clientY - from.y;
+  // Horizontal de verdad: largo y bastante más ancho que alto, para no
+  // robarle el gesto al scroll.
+  if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < 2 * Math.abs(dy)) return;
+
+  const { prev, next } = neighbours(state.plan, state.route);
+  const target = dx < 0 ? next : prev;
+  if (target) swap(routeHash(target));
+}
+
+function swap(hash: string): void {
+  state.flash = null;
+  location.replace(hash);
 }
 
 function onChange(event: Event): void {

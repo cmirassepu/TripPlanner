@@ -6,7 +6,7 @@
 
 import type { TripPayload, Day, Place } from '../model/types.ts';
 import type { AppState } from './state.ts';
-import { routeHash, today, nowMinutes } from './state.ts';
+import { routeHash, today, nowMinutes, neighbours, type Route } from './state.ts';
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
 import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
@@ -136,9 +136,9 @@ export function dayScreen(state: AppState): string {
   if (!nowShown && schedule.stops.length) rows.push(nowLine(now!));
 
   return `${installBanner(state)}
-    <div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
       pick(plan.title, lang) ?? 'Trip',
-    )}</a></div>
+    )}</a>${pager(plan, route)}</div>
     <p class="date">${esc(longDate(day.date, lang))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
     ${intro ? `<p class="lead">${esc(intro)}</p>` : ''}
@@ -154,6 +154,16 @@ export function dayScreen(state: AppState): string {
 }
 
 const NOT_FOUND = `<p class="empty">Day not found.</p>`;
+
+/** Las flechas de anterior y siguiente. Hacen lo mismo que deslizar el dedo. */
+function pager(plan: TripPayload, route: Route): string {
+  const { prev, next } = neighbours(plan, route);
+  const arrow = (to: Route | null, glyph: string, label: string) =>
+    to
+      ? `<button class="chip" data-swap="${esc(routeHash(to))}" aria-label="${label}">${glyph}</button>`
+      : `<span class="chip off" aria-hidden="true">${glyph}</span>`;
+  return arrow(prev, '‹', 'Previous') + arrow(next, '›', 'Next');
+}
 
 type Stop = Schedule['stops'][number];
 
@@ -262,9 +272,9 @@ export function stopScreen(state: AppState): string {
   const lang = plan.primaryLanguage;
   const w = stop.waypoint;
   const place = plan.places[w.place];
-  const back = `<div class="bar"><a class="back" href="${esc(
+  const back = `<div class="bar"><a class="back grow" href="${esc(
     routeHash({ name: 'day', tripId: route.tripId, dayId: day.id }),
-  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a></div>`;
+  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
   if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
 
   const when =

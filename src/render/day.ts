@@ -46,7 +46,7 @@ export function renderDay(plan: TripPayload, day: Day, opts: RenderOptions = {})
   <p class="date">${esc(longDate(day.date, lang))} · ${esc(day.type)}</p>
   <h1>${esc(title)}</h1>
   ${bilingual(day.title, lang, secondary, 'h2')}
-  <p class="start">Salida ${esc(day.startTime)} · ${schedule.stops.length} paradas · hasta ${esc(formatClock(schedule.end))}</p>
+  <p class="start">Start ${esc(day.startTime)} · ${schedule.stops.length} stops · until ${esc(formatClock(schedule.end))}</p>
   ${para(day.intro, lang, secondary)}
 </header>
 
@@ -78,21 +78,21 @@ export function renderStop(
   const place: Place | undefined = plan.places[w.place];
   if (!place) {
     return `<li class="stop broken"><div class="when">${esc(formatClock(arrive))}</div>
-      <div class="what"><h3>Sitio desconocido: ${esc(w.place)}</h3></div></li>`;
+      <div class="what"><h3>Unknown place: ${esc(w.place)}</h3></div></li>`;
   }
 
   const verdict = isOpenAt(place.hours, day.date, arrive);
   let conflict = '';
   if (verdict.state === 'closed') {
     const reason = whyClosed(verdict.windows, arrive);
-    const windows = verdict.windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'cerrado todo el día';
+    const windows = verdict.windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed all day';
     conflict = `<p class="conflict">${
       reason === 'too-early'
-        ? `Llegas a las ${esc(formatClock(arrive))} y no abre hasta ${esc(windows)}`
-        : `Llegas a las ${esc(formatClock(arrive))} y cierra ${esc(windows)}`
+        ? `You arrive at ${esc(formatClock(arrive))} and it does not open until ${esc(windows)}`
+        : `You arrive at ${esc(formatClock(arrive))} and it closes ${esc(windows)}`
     }</p>`;
   } else if (verdict.state === 'unknown' && verdict.reason === 'no-hours') {
-    conflict = `<p class="unknown-hours">Horario desconocido: no se ha podido comprobar la llegada</p>`;
+    conflict = `<p class="unknown-hours">Opening hours unknown: the arrival time could not be checked</p>`;
   }
 
   const anchor = w.anchor
@@ -117,7 +117,7 @@ export function renderStop(
       (f) =>
         `<li class="fact ${f.confidence}">${esc(pick(f.text, lang) ?? '')}${
           f.confidence === 'unverified'
-            ? '<span class="badge">sin verificar</span>'
+            ? '<span class="badge">unverified</span>'
             : f.source
               ? `<span class="src">${esc(f.source)}</span>`
               : ''
@@ -127,17 +127,17 @@ export function renderStop(
 
   const dog =
     place.dog && plan.travellers?.dogs
-      ? `<p class="dog ${place.dog.confidence}">Perro: ${
-          place.dog.allowed === true ? 'sí' : place.dog.allowed === false ? 'no' : 'con condiciones'
+      ? `<p class="dog ${place.dog.confidence}">Dog: ${
+          place.dog.allowed === true ? 'yes' : place.dog.allowed === false ? 'no' : 'with conditions'
         }${place.dog.note ? ` · ${esc(pick(place.dog.note, lang) ?? '')}` : ''}${
-          place.dog.confidence === 'unverified' ? '<span class="badge">sin verificar</span>' : ''
+          place.dog.confidence === 'unverified' ? '<span class="badge">unverified</span>' : ''
         }</p>`
       : '';
 
   const hoursToday = windowsFor(place.hours, day.date);
   const hours = hoursToday
-    ? `<span class="hours">${hoursToday.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'cerrado'}</span>`
-    : `<span class="hours unknown">horario desconocido</span>`;
+    ? `<span class="hours">${hoursToday.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed'}</span>`
+    : `<span class="hours unknown">hours unknown</span>`;
 
   const travel =
     w.travelFrom > 0
@@ -153,7 +153,7 @@ export function renderStop(
   <div class="when"><strong>${esc(formatClock(arrive))}</strong><span>${w.duration} min</span></div>
   <div class="what">
     <h3>${esc(place.name)}${place.nameLocal && place.nameLocal !== place.name ? ` <span class="local">${esc(place.nameLocal)}</span>` : ''}</h3>
-    <p class="meta">${esc(place.category ?? '')} · sale ${esc(formatClock(leave))} ${hours}</p>
+    <p class="meta">${esc(place.category ?? '')} · leave ${esc(formatClock(leave))} ${hours}</p>
     ${anchor}
     ${conflict}
     ${dog}

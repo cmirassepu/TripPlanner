@@ -116,7 +116,7 @@ export function evaluate(day: Day, now: Minutes, opts: EvaluateOptions = {}): Al
   // Sitio y hora, y nada más. Las etiquetas del plan son frases enteras
   // («Cierra el mercado (domingo)») que dentro de «No llegas a …» se leen fatal
   // y repiten lo que ya dice el nombre del sitio.
-  const target = `${nameOf(slack.anchor.waypoint.place)} antes de las ${at}`;
+  const target = `${nameOf(slack.anchor.waypoint.place)} by ${at}`;
 
   if (level === 'green') {
     return { level, slack: slack.slack, message: '' };
@@ -126,7 +126,7 @@ export function evaluate(day: Day, now: Minutes, opts: EvaluateOptions = {}): Al
     return {
       level,
       slack: slack.slack,
-      message: `Quedan ${formatDuration(slack.slack)} de margen para llegar a ${target}`,
+      message: `${formatDuration(slack.slack)} to spare to reach ${target}`,
     };
   }
 
@@ -138,7 +138,7 @@ export function evaluate(day: Day, now: Minutes, opts: EvaluateOptions = {}): Al
       level,
       slack: slack.slack,
       proposal,
-      message: `No llegas a ${target} por ${shortfall}, ni soltando lo prescindible.`,
+      message: `You will miss ${target} by ${shortfall}, even after dropping everything optional.`,
     };
   }
 
@@ -148,7 +148,7 @@ export function evaluate(day: Day, now: Minutes, opts: EvaluateOptions = {}): Al
     slack: slack.slack,
     proposal,
     message:
-      `No llegas a ${target} por ${shortfall}. ` +
-      `Saltando ${names} recuperas ${formatDuration(proposal.recovers)}`,
+      `You will miss ${target} by ${shortfall}. ` +
+      `Skipping ${names} wins back ${formatDuration(proposal.recovers)}`,
   };
 }

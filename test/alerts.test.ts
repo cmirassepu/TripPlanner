@@ -85,7 +85,7 @@ describe('§6.3 — el rojo nunca aparece sin proponer la salida', () => {
       statusOf: (id) => (['wp-01', 'wp-02', 'wp-03', 'wp-04'].includes(id) ? 'visited' : 'pending'),
     });
     assert.equal(alert.level, 'red');
-    assert.match(alert.message, /ni soltando lo prescindible/);
+    assert.match(alert.message, /even after dropping everything optional/);
   });
 
   test('el ámbar de las 09:15 es el margen real de 3 min sobre el Alcázar', () => {

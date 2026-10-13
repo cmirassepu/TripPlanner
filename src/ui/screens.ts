@@ -21,7 +21,7 @@ import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
 
 export function installBanner(state: AppState): string {
   if (state.storage.installed) return '';
-  return `<div class="install"><strong>Instálala en la pantalla de inicio</strong>${esc(
+  return `<div class="install"><strong>Add it to your home screen</strong>${esc(
     installHint(),
   )}</div>`;
 }
@@ -33,8 +33,9 @@ export function libraryScreen(state: AppState): string {
 
   if (state.plans.length === 0) {
     return `${installBanner(state)}
-      <div class="bar"><h1>Viajes</h1><a class="chip" href="${routeHash({ name: 'settings' })}">Ajustes</a></div>
-      <p class="empty">No hay ningún viaje cargado todavía.<br>Carga un archivo de viaje para empezar.</p>`;
+      <div class="bar"><h1>Trips</h1><a class="chip" href="${routeHash({ name: 'settings' })}">Settings</a></div>
+      <p class="empty">No trip loaded yet.<br>Load a trip file to get started.</p>
+      ${loadButton()}`;
   }
 
   const summaries = state.plans.map((p) => ({
@@ -45,31 +46,37 @@ export function libraryScreen(state: AppState): string {
   const rows = sortForLibrary(summaries.map((s) => s.summary))
     .map((s) => {
       const stored = summaries.find((x) => x.summary.title === s.title)!.stored;
-      const label = { active: 'en curso', upcoming: 'próximo', finished: 'terminado' }[s.status];
+      const label = { active: 'under way', upcoming: 'upcoming', finished: 'finished' }[s.status];
       const pct = s.planned ? Math.round((s.visited / s.planned) * 100) : 0;
       return `<li><button class="trip" data-go="${esc(
         routeHash({ name: 'trip', tripId: stored.tripId }),
       )}">
         <span class="tag ${s.status === 'active' ? 'active' : ''}">${label}</span>
         <h3>${esc(s.title)}</h3>
-        <p class="meta">${esc(s.startDate)} → ${esc(s.endDate)} · ${s.days} días · ${
+        <p class="meta">${esc(s.startDate)} → ${esc(s.endDate)} · ${s.days} days · ${
           s.visited
-        }/${s.planned} paradas</p>
+        }/${s.planned} stops</p>
         <div class="progress"><i style="width:${pct}%"></i></div>
       </button></li>`;
     })
     .join('');
 
   return `${installBanner(state)}
-    <div class="bar"><h1>Viajes</h1><a class="chip" href="${routeHash({ name: 'settings' })}">Ajustes</a></div>
-    <ul class="trips">${rows}</ul>`;
+    <div class="bar"><h1>Trips</h1><a class="chip" href="${routeHash({ name: 'settings' })}">Settings</a></div>
+    <ul class="trips">${rows}</ul>
+    ${loadButton()}`;
+}
+
+/** §9.1 — un selector de archivos: en iOS abre Archivos, que es donde cae iCloud. */
+function loadButton(): string {
+  return `<label class="btn ghost">Load trip file<input type="file" accept=".json,application/json" data-act="load-file" hidden></label>`;
 }
 
 /* ── Índice del viaje ────────────────────────────────────────────────── */
 
 export function tripScreen(state: AppState): string {
   const plan = state.plan;
-  if (!plan) return `<p class="empty">Viaje no encontrado.</p>`;
+  if (!plan) return `<p class="empty">Trip not found.</p>`;
   const todayIso = today(state.clock);
   const tripId = state.route.name === 'trip' ? state.route.tripId : '';
 
@@ -82,16 +89,18 @@ export function tripScreen(state: AppState): string {
       )}">
         <b>${esc(shortDate(d.date))}</b>
         <span>${esc(pick(d.title, plan.primaryLanguage) ?? d.id)}
-          <span class="alt"> · ${d.waypoints.length} paradas · ${esc(d.startTime)}–${esc(
-            formatClock(schedule.end),
-          )}</span>
+          <span class="alt"> · ${
+            d.waypoints.length
+              ? `${d.waypoints.length} ${d.waypoints.length === 1 ? 'stop' : 'stops'} · ${esc(d.startTime)}–${esc(formatClock(schedule.end))}`
+              : esc(plan.stays.find((st) => st.id === d.stay)?.name ?? 'Free day')
+          }</span>
         </span>
       </button></li>`;
     })
     .join('');
 
   return `${installBanner(state)}
-    <div class="bar"><a class="back" href="#/">‹ Viajes</a></div>
+    <div class="bar"><a class="back" href="#/">‹ Trips</a></div>
     <h1>${esc(pick(plan.title, plan.primaryLanguage) ?? tripId)}</h1>
     <p class="meta">${esc(plan.startDate)} → ${esc(plan.endDate)} · ${esc(plan.defaultTimezone)}</p>
     <ul class="days">${rows}</ul>`;
@@ -104,32 +113,41 @@ export function dayScreen(state: AppState): string {
   const journal = state.journal;
   const route = state.route;
   if (!plan || !journal || route.name !== 'day') {
-    return `<p class="empty">Día no encontrado.</p>`;
+    return `<p class="empty">Day not found.</p>`;
   }
 
   const day = plan.days.find((d) => d.id === route.dayId);
-  if (!day) return `<p class="empty">Día no encontrado.</p>`;
+  if (!day) return `<p class="empty">Day not found.</p>`;
 
   const lang = plan.primaryLanguage;
   const secondary = plan.languages.find((l) => l !== lang) ?? null;
   const now = nowMinutes(state.clock);
+  // El reloj sólo dice algo el día en cuestión: mirar el 23 de diciembre desde
+  // octubre no es ir seis horas tarde.
+  const isToday = day.date === today(state.clock);
   const free = isFreeMode(journal, day.id);
+  const intro = pick(day.intro, lang);
 
   return `${installBanner(state)}
     <div class="bar">
       <a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
-        pick(plan.title, lang) ?? 'Viaje',
+        pick(plan.title, lang) ?? 'Trip',
       )}</a>
-      <button class="chip" data-act="freemode" aria-pressed="${free}">Modo libre</button>
+      <button class="chip" data-act="freemode" aria-pressed="${free}">Free mode</button>
     </div>
     <p class="date">${esc(longDate(day.date, lang))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
-    ${alertBanner(state, plan, day, journal)}
-    ${day.type === 'transit' ? transitBody(plan, day, now) : timelineBody(plan, day, journal, lang, secondary)}
-    <div class="acts" style="margin-top:1rem">
-      <button class="btn" data-act="improvise">+ Parada improvisada</button>
-    </div>
-    ${improvisedList(journal, day)}`;
+    ${intro ? `<p class="meta">${esc(intro)}</p>` : ''}
+    ${isToday ? alertBanner(state, plan, day, journal) : ''}
+    ${day.type === 'transit' ? transitPanel(plan, day, isToday ? now : null) : ''}
+    ${
+      day.waypoints.length
+        ? timelineBody(plan, day, journal, lang, secondary)
+        : '<p class="empty">Nothing planned yet.</p>'
+    }
+    <p><button class="btn ghost" data-act="improvise">+ Unplanned stop</button></p>
+    ${improvisedList(journal, day)}
+    ${stayPanel(plan, day)}`;
 }
 
 function alertBanner(state: AppState, plan: TripPayload, day: Day, journal: Journal): string {
@@ -145,7 +163,7 @@ function alertBanner(state: AppState, plan: TripPayload, day: Day, journal: Jour
   const anyMarked = day.waypoints.some((w) => statusOf(journal, w.id) !== 'pending');
   if (!anyMarked && now > started) {
     return `<div class="alert amber">
-      <p>Marca por dónde vas y te aviso de si llegas.</p>
+      <p>Mark where you are and I will tell you if you are on time.</p>
     </div>`;
   }
 
@@ -157,13 +175,13 @@ function alertBanner(state: AppState, plan: TripPayload, day: Day, journal: Jour
     alert.proposal && alert.proposal.drop.length && !alert.proposal.insufficient
       ? `<button class="act" data-act="drop" data-ids="${esc(
           alert.proposal.drop.map((w) => w.id).join(','),
-        )}">Saltarlas</button>`
+        )}">Skip them</button>`
       : '';
 
   return `<div class="alert ${alert.level}">
     <p>${esc(alert.message)}</p>
     ${fix}
-    <button class="act" data-act="dismiss" data-level="${alert.level}">Vale</button>
+    <button class="act" data-act="dismiss" data-level="${alert.level}">OK</button>
   </div>`;
 }
 
@@ -192,10 +210,10 @@ function timelineBody(
               : '';
 
       const actions = `<div class="acts">
-        ${button('arrive', stop.waypoint.id, 'Llegué', status === 'current')}
-        ${button('visited', stop.waypoint.id, 'Hecho', status === 'visited' || status === 'partial')}
-        ${button('skip', stop.waypoint.id, 'Saltar', status === 'skipped')}
-        ${status !== 'pending' ? button('unmark', stop.waypoint.id, 'Deshacer', false) : ''}
+        ${button('arrive', stop.waypoint.id, 'Arrived', status === 'current')}
+        ${button('visited', stop.waypoint.id, 'Done', status === 'visited' || status === 'partial')}
+        ${button('skip', stop.waypoint.id, 'Skip', status === 'skipped')}
+        ${status !== 'pending' ? button('unmark', stop.waypoint.id, 'Undo', false) : ''}
       </div>`;
 
       return renderStop(plan, day, stop.waypoint, stop.arrive, stop.leave, lang, secondary, {
@@ -213,42 +231,78 @@ function button(act: string, id: string, label: string, pressed: boolean): strin
 }
 
 /**
- * §4.5 — un día `transit` no es una lista de paradas: es un reloj. El aviso deja
- * de ser «vas justo» para ser «sal ya».
+ * §4.5 — un día `transit` es un reloj además de una lista: arriba el próximo
+ * plazo, debajo la línea de tiempo completa, porque la reserva, los asientos y
+ * los avisos viven en las notas de cada parada.
+ *
+ * `now` es `null` si el día no es hoy: entonces no hay cuenta atrás, sólo la
+ * hora que manda.
  */
-function transitBody(plan: TripPayload, day: Day, now: number): string {
+function transitPanel(plan: TripPayload, day: Day, now: number | null): string {
+  const lang = plan.primaryLanguage;
   const schedule = computeSchedule(day);
-  const next = schedule.stops.find((s) => s.waypoint.anchor && parseAnchor(s) > now);
-  const target = next ?? schedule.stops[schedule.stops.length - 1];
-  const at = target?.waypoint.anchor ? parseAnchor(target) : schedule.end;
+
+  // Sólo cuentan los plazos. La hora de entrada al hotel no se puede perder.
+  const deadlines = schedule.stops.filter(
+    (s) => s.waypoint.anchor && s.waypoint.anchor.type !== 'opening',
+  );
+  if (!deadlines.length) return '';
+
+  const label = (s: (typeof deadlines)[number]) =>
+    pick(s.waypoint.anchor!.label, lang) ?? plan.places[s.waypoint.place]?.name ?? s.waypoint.place;
+  const big = (text: string) =>
+    `<h1 style="font-size:3rem;font-variant-numeric:tabular-nums;margin:.2rem 0">${esc(text)}</h1>`;
+
+  if (now === null) {
+    const first = deadlines[0];
+    return `<div class="panel">
+      <p class="meta">${esc(label(first))}</p>
+      ${big(first.waypoint.anchor!.time)}
+      <p class="verdict ok">The plan starts at ${esc(day.startTime)}</p>
+    </div>`;
+  }
+
+  const next = deadlines.find((s) => parseAnchor(s) > now);
+  if (!next) {
+    return `<div class="panel">
+      <p class="meta">${esc(label(deadlines[deadlines.length - 1]))}</p>
+      <p class="verdict ok">No deadlines left today.</p>
+    </div>`;
+  }
+
+  const at = parseAnchor(next);
   const left = at - now;
-
-  const rows = schedule.stops
-    .map((s) => {
-      const place = plan.places[s.waypoint.place];
-      const a = s.waypoint.anchor;
-      return `<li class="dayrow"><b>${esc(a ? a.time : formatClock(s.arrive))}</b>
-        <span>${esc(place?.name ?? s.waypoint.place)}${
-          a ? `<span class="alt"> · ${esc(pick(a.label, plan.primaryLanguage) ?? a.type)}</span>` : ''
-        }</span></li>`;
-    })
-    .join('');
-
   const urgent = left <= 30;
   return `<div class="panel">
-    <p class="meta">${esc(
-      target?.waypoint.anchor
-        ? pick(target.waypoint.anchor.label, plan.primaryLanguage) ?? 'Siguiente hito'
-        : 'Fin',
-    )}</p>
-    <h1 style="font-size:3rem;font-variant-numeric:tabular-nums;margin:.2rem 0">${esc(
-      formatDuration(left),
-    )}</h1>
-    <p class="verdict ${urgent ? 'bad' : 'ok'}">${
-      left < 0 ? 'Ya ha pasado la hora.' : urgent ? 'Sal ya.' : `Hasta las ${esc(formatClock(at))}`
-    }</p>
-  </div>
-  <ul class="days">${rows}</ul>`;
+    <p class="meta">${esc(label(next))}</p>
+    ${big(formatDuration(left))}
+    <p class="verdict ${urgent ? 'bad' : 'ok'}">${urgent ? 'Go now.' : `Until ${esc(formatClock(at))}`}</p>
+  </div>`;
+}
+
+/** Dónde se duerme esa noche. En un día libre es lo único seguro que hay. */
+function stayPanel(plan: TripPayload, day: Day): string {
+  const stay = plan.stays.find((s) => s.id === day.stay);
+  if (!stay) return '';
+
+  const lang = plan.primaryLanguage;
+  const place = stay.place ? plan.places[stay.place] : undefined;
+  const phone = place?.contact?.phone;
+  const notes = pick(stay.notes, lang);
+  const facts = (place?.facts ?? []).map((f) => `<p>${esc(pick(f.text, lang) ?? '')}</p>`).join('');
+
+  return `<div class="panel">
+    <p class="meta">Tonight</p>
+    <h3>${esc(stay.name)}</h3>
+    <dl>
+      ${place?.address ? `<dt>Address</dt><dd>${esc(place.address)}</dd>` : ''}
+      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
+      ${stay.confirmation ? `<dt>Booking</dt><dd>${esc(stay.confirmation)}</dd>` : ''}
+      <dt>Dates</dt><dd>${esc(shortDate(stay.from))} → ${esc(shortDate(stay.to))}</dd>
+    </dl>
+    ${notes ? `<p>${esc(notes)}</p>` : ''}
+    ${facts}
+  </div>`;
 }
 
 const parseAnchor = (s: { waypoint: { anchor?: { time: string } | null } }): number => {
@@ -281,63 +335,63 @@ export interface SpikeView {
 export function settingsScreen(state: AppState, spike: SpikeView): string {
   const s = state.storage;
   const v = verdict(spike.info, s.persisted, spike.ranges, spike.startedAt);
-  const tone = v.startsWith('APROBADO') ? 'ok' : v.includes('no') || v.includes('falla') ? 'bad' : '';
+  const tone = v.startsWith('PASSED') ? 'ok' : v.includes('refused') || v.includes('fails') ? 'bad' : '';
 
-  return `<div class="bar"><a class="back" href="#/">‹ Viajes</a><h1>Ajustes</h1></div>
+  return `<div class="bar"><a class="back" href="#/">‹ Trips</a><h1>Settings</h1></div>
 
   <div class="panel">
-    <h3>Almacenamiento</h3>
+    <h3>Storage</h3>
     <dl>
-      <dt>Instalada</dt><dd>${s.installed ? 'sí' : 'no'}</dd>
-      <dt>Persistente</dt><dd>${s.persisted ? 'sí' : 'no'}</dd>
-      <dt>Usado</dt><dd>${formatBytes(s.usage)}</dd>
-      <dt>Cuota</dt><dd>${formatBytes(s.quota)}</dd>
+      <dt>Installed</dt><dd>${s.installed ? 'yes' : 'no'}</dd>
+      <dt>Persistent</dt><dd>${s.persisted ? 'yes' : 'no'}</dd>
+      <dt>Used</dt><dd>${formatBytes(s.usage)}</dd>
+      <dt>Quota</dt><dd>${formatBytes(s.quota)}</dd>
     </dl>
-    ${s.persisted ? '' : '<button class="btn" data-act="persist">Pedir almacenamiento persistente</button>'}
+    ${s.persisted ? '' : '<button class="btn" data-act="persist">Ask for persistent storage</button>'}
   </div>
 
   <div class="panel">
-    <h3>Spike de OPFS (§8.4)</h3>
-    <p class="meta">Escribe 150 MB, comprueba que persisten y que se leen por rangos. Es el go/no-go de los mapas.</p>
+    <h3>Map storage test</h3>
+    <p class="meta">Writes 150 MB, then checks it is still there and can be read in pieces. This decides whether offline maps are possible.</p>
     <dl>
-      <dt>Archivo</dt><dd>${spike.info.exists ? formatBytes(spike.info.bytes) : 'no existe'}</dd>
-      <dt>Escrito</dt><dd>${spike.startedAt ? esc(spike.startedAt.slice(0, 16).replace('T', ' ')) : '—'}</dd>
+      <dt>File</dt><dd>${spike.info.exists ? formatBytes(spike.info.bytes) : 'none'}</dd>
+      <dt>Written</dt><dd>${spike.startedAt ? esc(spike.startedAt.slice(0, 16).replace('T', ' ')) : '—'}</dd>
     </dl>
     <p class="verdict ${tone}">${esc(v)}</p>
     ${
       spike.busy
         ? `<p class="meta">${esc(spike.busy)}</p>`
-        : `<button class="btn" data-act="spike-write">Escribir 150 MB</button>
-           <button class="btn ghost" data-act="spike-verify">Comprobar rangos</button>
-           ${spike.info.exists ? '<button class="btn ghost" data-act="spike-delete">Borrar</button>' : ''}`
+        : `<button class="btn" data-act="spike-write">Write 150 MB</button>
+           <button class="btn ghost" data-act="spike-verify">Check reading</button>
+           ${spike.info.exists ? '<button class="btn ghost" data-act="spike-delete">Delete</button>' : ''}`
     }
   </div>
 
   <div class="panel">
-    <h3>Reloj simulado</h3>
-    <p class="meta">§14 paso 4: los avisos tienen que poder probarse cambiando el reloj. Sin esto la app no hace nada fuera de las fechas del viaje.</p>
+    <h3>Simulated clock</h3>
+    <p class="meta">Pretend it is another date and time, to try out the countdowns and warnings before the trip.</p>
     <dl>
-      <dt>Fecha</dt><dd><input type="date" data-act="set-date" value="${esc(state.clock.date ?? '')}"></dd>
-      <dt>Hora</dt><dd><input type="time" data-act="set-time" value="${esc(state.clock.time ?? '')}"></dd>
+      <dt>Date</dt><dd><input type="date" data-act="set-date" value="${esc(state.clock.date ?? '')}"></dd>
+      <dt>Time</dt><dd><input type="time" data-act="set-time" value="${esc(state.clock.time ?? '')}"></dd>
     </dl>
-    ${state.clock.date || state.clock.time ? '<button class="btn ghost" data-act="clock-reset">Volver al reloj real</button>' : ''}
+    ${state.clock.date || state.clock.time ? '<button class="btn ghost" data-act="clock-reset">Back to the real clock</button>' : ''}
   </div>
 
   ${
     state.updateReady
       ? `<div class="panel">
-    <h3>Actualización</h3>
-    <p class="meta">Hay una versión nueva esperando. §12.2 no la instala sola durante un viaje activo: recargar la app a media jornada, sin red para arreglar nada, es el peor momento. Tú decides cuándo.</p>
-    <button class="btn" data-act="update-now">Instalarla ahora</button>
+    <h3>Update</h3>
+    <p class="meta">A new version is waiting. It does not install itself during a trip, because reloading mid-day with no connection is the worst moment. You decide when.</p>
+    <button class="btn" data-act="update-now">Install it now</button>
   </div>`
       : ''
   }
 
   <div class="panel">
-    <h3>Datos</h3>
-    <p class="meta">Borrar el registro deja el plan intacto: son cosas distintas y se guardan aparte (§2.5).</p>
-    <button class="btn ghost" data-act="seed">Recargar el viaje de prueba</button>
-    <button class="btn ghost" data-act="wipe-journal">Borrar mi registro</button>
+    <h3>Data</h3>
+    <p class="meta">Deleting your record leaves the plan untouched: they are stored separately.</p>
+    <button class="btn ghost" data-act="seed">Reload the sample trip</button>
+    <button class="btn ghost" data-act="wipe-journal">Delete my record</button>
   </div>`;
 }
 

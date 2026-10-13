@@ -40,13 +40,13 @@ describe('vista de día', () => {
   });
 
   test('los conflictos salen pegados a su parada, no en una lista aparte', () => {
-    assert.match(html, /Llegas a las 18:27 y cierra 09:00–17:00/);
-    assert.match(html, /Llegas a las 12:07 y no abre hasta 14:30–18:00/);
-    assert.match(html, /Horario desconocido/);
+    assert.match(html, /You arrive at 18:27 and it closes 09:00–17:00/);
+    assert.match(html, /You arrive at 12:07 and it does not open until 14:30–18:00/);
+    assert.match(html, /Opening hours unknown/);
   });
 
   test('§2.4 — lo no verificado se distingue a simple vista', () => {
-    assert.match(html, /class="badge">sin verificar</);
+    assert.match(html, /class="badge">unverified</);
     assert.match(html, /class="fact unverified"/);
   });
 

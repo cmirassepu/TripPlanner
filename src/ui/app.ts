@@ -24,6 +24,7 @@ import { parseRoute, routeHash, today, nowMinutes, type AppState, type Simulated
 import { libraryScreen, tripScreen, dayScreen, settingsScreen, type SpikeView } from './screens.ts';
 import { writeProbe, verifyRanges, probeInfo, deleteProbe } from '../spike/opfs.ts';
 import type { TripFile } from '../model/types.ts';
+import { validateFile } from '../validate/validate.ts';
 
 const CLOCK_KEY = 'guia-viaje:clock';
 const SPIKE_KEY = 'guia-viaje:spike-started';
@@ -117,7 +118,7 @@ async function maybeActivate(registration: ServiceWorkerRegistration): Promise<v
     // Ajustes hay un botón para aceptarla si hace falta ya.
     waiting = registration;
     state.updateReady = true;
-    state.flash = 'Hay una versión nueva. No se instala sola durante el viaje: ve a Ajustes.';
+    state.flash = 'A new version is available. It does not install itself during the trip: go to Settings.';
     render();
     return;
   }
@@ -187,6 +188,7 @@ function onClick(event: Event): void {
   const go = target.dataset.go;
   if (go) {
     event.preventDefault();
+    state.flash = null;
     location.hash = go;
     return;
   }
@@ -200,6 +202,45 @@ function onChange(event: Event): void {
   const action = target.dataset.act;
   if (action === 'set-date') setClock({ ...state.clock, date: target.value || null });
   if (action === 'set-time') setClock({ ...state.clock, time: target.value || null });
+  if (action === 'load-file' && target.files?.[0]) void loadFile(target.files[0]);
+}
+
+/**
+ * §9.2 — carga de un archivo elegido por el usuario. Se valida entero antes de
+ * tocar nada: un plan malo no debe sustituir a uno bueno. De momento sólo
+ * `kind: "trip"`; los parches necesitan la pantalla de diff (§9.3).
+ */
+async function loadFile(picked: File): Promise<void> {
+  let file: TripFile;
+  try {
+    file = JSON.parse(await picked.text());
+  } catch {
+    state.flash = `${picked.name}: not a valid trip file.`;
+    render();
+    return;
+  }
+
+  if (file?.kind !== 'trip') {
+    state.flash = `${picked.name}: only complete trip files can be loaded for now.`;
+    render();
+    return;
+  }
+
+  const stored = typeof file.tripId === 'string' ? await loadPlan(db, file.tripId) : undefined;
+  const result = validateFile(file, { appliedVersion: stored?.version });
+
+  if (!result.applicable) {
+    state.flash = `${picked.name}: not loaded. ${[...result.blockers, result.report].filter(Boolean).join(' ')}`;
+    render();
+    return;
+  }
+
+  await savePlan(db, file.tripId, file.payload, file.version);
+  if (!(await loadJournal(db, file.tripId))) await saveJournal(db, emptyJournal(file.tripId));
+
+  await navigate();
+  state.flash = `Loaded: ${picked.name}, version ${file.version}. ${result.warnings} warnings.`;
+  render();
 }
 
 async function act(action: string, el: HTMLElement): Promise<void> {
@@ -260,7 +301,7 @@ async function act(action: string, el: HTMLElement): Promise<void> {
     /* Improvisación y modo libre (§7) */
     case 'improvise': {
       if (!journal || !day) break;
-      const name = prompt('¿Qué es?');
+      const name = prompt('What is it?');
       if (!name) break;
       const coords = await currentPosition();
       await commit(improvise(journal, { dayId: day.id, name, coords }, clockNow()));
@@ -293,7 +334,7 @@ async function act(action: string, el: HTMLElement): Promise<void> {
     case 'wipe-journal': {
       // Sólo el registro. El plan se queda: son almacenes distintos justamente
       // para que se puedan tirar por separado (§2.5).
-      if (!confirm('¿Borrar todas tus marcas y notas? El plan no se toca.')) break;
+      if (!confirm('Delete all your marks and notes? The plan is not touched.')) break;
       for (const p of state.plans) await saveJournal(db, emptyJournal(p.tripId));
       state.alert = { level: 'green' };
       await navigate();
@@ -302,11 +343,11 @@ async function act(action: string, el: HTMLElement): Promise<void> {
 
     /* Spike (§8.4) */
     case 'spike-write':
-      spike.busy = 'Escribiendo…';
+      spike.busy = 'Writing…';
       render();
       {
         const result = await writeProbe(150, (p) => {
-          spike.busy = `Escribiendo… ${Math.round((p.written / p.total) * 100)} %`;
+          spike.busy = `Writing… ${Math.round((p.written / p.total) * 100)} %`;
           const node = document.querySelector('.panel .meta:last-of-type');
           if (node) node.textContent = spike.busy;
         });
@@ -314,13 +355,13 @@ async function act(action: string, el: HTMLElement): Promise<void> {
         if (result.ok) localStorage.setItem(SPIKE_KEY, new Date().toISOString());
         spike.startedAt = localStorage.getItem(SPIKE_KEY);
         spike.info = await probeInfo();
-        spike.busy = result.ok ? null : `Falló: ${result.error}`;
+        spike.busy = result.ok ? null : `Failed: ${result.error}`;
       }
       await navigate();
       break;
 
     case 'spike-verify':
-      spike.busy = 'Leyendo rangos…';
+      spike.busy = 'Reading…';
       render();
       spike.ranges = await verifyRanges();
       spike.info = await probeInfo();

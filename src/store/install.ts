@@ -60,6 +60,6 @@ export function installHint(): string {
   const ua = navigator.userAgent;
   const iOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && 'ontouchend' in document);
   return iOS
-    ? 'Pulsa Compartir y luego «Añadir a pantalla de inicio». Sin instalar, Safari borra los datos a los 7 días de no abrirla.'
-    : 'Instala la app desde el menú del navegador para que el navegador no borre los datos.';
+    ? 'Tap Share, then “Add to Home Screen”. If it is not installed, Safari deletes the data after 7 days without opening it.'
+    : 'Install the app from the browser menu so the browser does not delete the data.';
 }

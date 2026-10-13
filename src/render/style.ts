@@ -115,6 +115,8 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .panel dl{display:grid;grid-template-columns:auto 1fr;gap:.3rem .8rem;margin:.6rem 0 0;font-size:.85rem}
 .panel dt{color:var(--muted)}
 .panel dd{margin:0;font-variant-numeric:tabular-nums}
+.panel a{color:var(--accent)}
+a.chip{color:inherit;text-decoration:none}
 .btn{display:inline-block;padding:.55rem 1.1rem;border-radius:.5rem;background:var(--accent);color:var(--bg);font-weight:600;font-size:.9rem;margin:.5rem .4rem 0 0}
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink)}
 .verdict{margin:.6rem 0 0;padding:.7rem .85rem;border-radius:.5rem;font-size:.88rem;background:var(--warn-bg);color:var(--warn)}

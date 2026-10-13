@@ -146,7 +146,7 @@ export function verdict(
   ranges: ProbeResult | null,
   startedAt: string | null,
 ): string {
-  if (!info.exists) return 'Sin datos todavía: escribe el archivo de prueba.';
+  if (!info.exists) return 'No data yet: write the test file.';
 
   const hours = startedAt
     ? Math.floor((Date.now() - Date.parse(startedAt)) / 3_600_000)
@@ -156,18 +156,18 @@ export function verdict(
   // El resultado de los rangos se cuenta siempre: aunque persist() falle, saber
   // si la lectura por rangos funciona en el aparato sigue siendo información, y
   // este experimento se hace una vez y se espera dos días.
-  const reads = ranges ? (ranges.ok ? `Rangos OK (${ranges.elapsedMs} ms).` : `Rangos KO: ${ranges.error}.`) : '';
+  const reads = ranges ? (ranges.ok ? `Reading OK (${ranges.elapsedMs} ms).` : `Reading failed: ${ranges.error}.`) : '';
 
   if (!persisted) {
-    return `${size} escritos, pero persist() dijo que no. ${reads} Sin instalar en la pantalla de inicio esto es lo normal; instálala y repítelo.`;
+    return `${size} written, but the browser refused to keep it permanently. ${reads} That is normal when the app is not on the home screen; install it and repeat.`;
   }
   if (ranges && !ranges.ok) {
-    return `${size} conservados ${hours} h, pero la lectura por rangos falla: ${ranges.error}`;
+    return `${size} kept for ${hours} h, but reading it in pieces fails: ${ranges.error}`;
   }
   if (hours < 24) {
-    return `${size} conservados y persistentes. Faltan ${24 - hours} h para el veredicto: vuelve a abrirla mañana.`;
+    return `${size} kept and permanent. ${24 - hours} h to go before the verdict: open the app again tomorrow.`;
   }
-  return `APROBADO — ${size} conservados ${hours} h, persistentes y legibles por rangos${
+  return `PASSED — ${size} kept for ${hours} h, permanent and readable in pieces${
     ranges ? ` (${ranges.elapsedMs} ms)` : ''
-  }. Los mapas entran en v1.`;
+  }. Offline maps are possible.`;
 }

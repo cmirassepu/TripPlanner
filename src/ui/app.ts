@@ -16,7 +16,8 @@ import {
   tripScreen,
   dayScreen,
   stopScreen,
-  stayScreen,
+  placeScreen,
+  bookingsScreen,
   settingsScreen,
   type SpikeView,
 } from './screens.ts';
@@ -183,9 +184,11 @@ function render(): void {
         ? dayScreen(state)
         : state.route.name === 'stop'
           ? stopScreen(state)
-          : state.route.name === 'stay'
-            ? stayScreen(state)
-            : state.route.name === 'trip'
+          : state.route.name === 'place'
+            ? placeScreen(state)
+            : state.route.name === 'bookings'
+              ? bookingsScreen(state)
+              : state.route.name === 'trip'
           ? tripScreen(state)
           : libraryScreen(state);
 
@@ -305,6 +308,10 @@ async function loadFile(picked: File): Promise<void> {
 
 async function act(action: string, el: HTMLElement): Promise<void> {
   switch (action) {
+    case 'back':
+      history.back();
+      break;
+
     /* Ajustes */
     case 'persist':
       await requestPersistence();

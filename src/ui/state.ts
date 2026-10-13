@@ -12,11 +12,15 @@ import { parseClock, type Minutes } from '../core/time.ts';
 
 export type Route =
   | { name: 'library' }
-  | { name: 'day'; tripId: string; dayId: string }
+  | { name: 'day'; tripId: string; dayId: string; tab: DayTab }
   | { name: 'stop'; tripId: string; dayId: string; waypointId: string }
-  | { name: 'stay'; tripId: string; dayId: string }
+  | { name: 'place'; tripId: string; dayId: string; placeId: string }
+  | { name: 'bookings'; tripId: string }
   | { name: 'trip'; tripId: string }
   | { name: 'settings' };
+
+/** Las tres vistas de un día. `plan` es la que sale por defecto. */
+export type DayTab = 'plan' | 'nearby' | 'bookings';
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -27,9 +31,13 @@ export function parseRoute(hash: string): Route {
       if (parts[4] === 'stop' && parts[5]) {
         return { name: 'stop', tripId, dayId: parts[3], waypointId: decodeURIComponent(parts[5]) };
       }
-      if (parts[4] === 'stay') return { name: 'stay', tripId, dayId: parts[3] };
-      return { name: 'day', tripId, dayId: parts[3] };
+      if (parts[4] === 'place' && parts[5]) {
+        return { name: 'place', tripId, dayId: parts[3], placeId: decodeURIComponent(parts[5]) };
+      }
+      const tab: DayTab = parts[4] === 'nearby' || parts[4] === 'bookings' ? parts[4] : 'plan';
+      return { name: 'day', tripId, dayId: parts[3], tab };
     }
+    if (parts[2] === 'bookings') return { name: 'bookings', tripId: decodeURIComponent(parts[1]) };
     return { name: 'trip', tripId: decodeURIComponent(parts[1]) };
   }
   return { name: 'library' };
@@ -44,11 +52,15 @@ export function routeHash(route: Route): string {
     case 'trip':
       return `#/trip/${encodeURIComponent(route.tripId)}`;
     case 'day':
-      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}`;
+      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}${
+        route.tab === 'plan' ? '' : `/${route.tab}`
+      }`;
     case 'stop':
       return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/stop/${encodeURIComponent(route.waypointId)}`;
-    case 'stay':
-      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/stay`;
+    case 'place':
+      return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/place/${encodeURIComponent(route.placeId)}`;
+    case 'bookings':
+      return `#/trip/${encodeURIComponent(route.tripId)}/bookings`;
   }
 }
 
@@ -60,8 +72,9 @@ export function routeHash(route: Route): string {
 export function neighbours(plan: TripPayload, route: Route): { prev: Route | null; next: Route | null } {
   if (route.name === 'day') {
     const i = plan.days.findIndex((d) => d.id === route.dayId);
+    // La pestaña se conserva: quien mira las reservas quiere las del día de al lado.
     const at = (j: number): Route | null =>
-      i >= 0 && plan.days[j] ? { name: 'day', tripId: route.tripId, dayId: plan.days[j].id } : null;
+      i >= 0 && plan.days[j] ? { ...route, dayId: plan.days[j].id } : null;
     return { prev: at(i - 1), next: at(i + 1) };
   }
 

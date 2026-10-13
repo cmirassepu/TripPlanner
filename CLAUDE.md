@@ -27,9 +27,20 @@ Do not reopen these unless the user does.
   free mode. The "now" line on the day screen is driven by the clock alone. The
   journal modules under `src/journal/` are still there and tested, but no screen
   uses them.
-- **Simple screens, detail one tap away.** The day screen shows one line per stop:
-  time, name, and the deadline that matters. Everything else lives on the stop's own
-  page. The test for the day screen is "do I need this to act in the next hour?".
+- **Simple screens, detail one tap away.** Each day has three tabs. *Plan* shows one
+  line per stop: time, name, and the deadline that matters; everything else lives on
+  the stop's own page. *Nearby* lists every place recorded for the area, planned or
+  not. *Bookings* shows that day's flight, hotel and booked activities. The test for
+  the Plan tab is "do I need this to act in the next hour?".
+- **Places belong to an area, not a day.** `Place.area` matches `Stay.area`. Keep each
+  area's list curated (roughly 10 to 15 places), not everything in the guidebook.
+- **Meals are not fixed places.** A meal is a slot in the timeline pointing at a
+  generic place ("Lunch near the hotel") with `choices` to pick from by mood.
+- **Bookings are data, not sentences.** Flights, activities and transfers go in
+  `bookings` with their reference in a field; hotels stay in `stays`. Do not repeat
+  booking details as notes on a stop.
+- **On flight days the departure time leads.** The flight is a `departure` anchor at
+  its departure time; the check-in cutoff is a note.
 - **English only**, for the app's labels and for trip content. Validator messages,
   code comments and commit messages are in Spanish; keep writing those in Spanish.
 - **Photos are embedded in the trip file** as `data:image/...` URIs so they work

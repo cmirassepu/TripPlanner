@@ -4,9 +4,9 @@
  * el bundle se cachea entero, así que cada kilobyte se paga en el aeropuerto.
  */
 
-import type { TripPayload, Day, Place } from '../model/types.ts';
+import type { TripPayload, Day, Place, Stay, Booking, Note } from '../model/types.ts';
 import type { AppState } from './state.ts';
-import { routeHash, today, nowMinutes, neighbours, type Route } from './state.ts';
+import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab } from './state.ts';
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
 import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
@@ -79,7 +79,7 @@ export function tripScreen(state: AppState): string {
       const schedule = computeSchedule(d);
       const isToday = d.date === todayIso;
       return `<li><button class="dayrow ${isToday ? 'today' : ''}" data-go="${esc(
-        routeHash({ name: 'day', tripId, dayId: d.id }),
+        routeHash({ name: 'day', tripId, dayId: d.id, tab: 'plan' }),
       )}">
         <b>${esc(shortDate(d.date))}</b>
         <span>${esc(pick(d.title, plan.primaryLanguage) ?? d.id)}
@@ -97,17 +97,20 @@ export function tripScreen(state: AppState): string {
     <div class="bar"><a class="back" href="#/">‹ Trips</a></div>
     <h1>${esc(pick(plan.title, plan.primaryLanguage) ?? tripId)}</h1>
     <p class="meta">${esc(plan.startDate)} → ${esc(plan.endDate)} · ${esc(plan.defaultTimezone)}</p>
+    <ul class="days"><li><button class="dayrow" data-go="${esc(
+      routeHash({ name: 'bookings', tripId }),
+    )}"><b>All</b><span class="grow">Bookings</span><span class="go">›</span></button></li></ul>
     <ul class="days">${rows}</ul>`;
 }
 
 /* ── Día ─────────────────────────────────────────────────────────────── */
 
 /**
- * El día, en una línea por parada. Aquí sólo va lo que hace falta para actuar
- * en la próxima hora: cuándo, dónde y el plazo que manda. El resto vive en la
- * página de cada parada, a un toque.
+ * El día tiene tres vistas: el plan, lo que hay por la zona y las reservas.
  *
- * No se marca nada: la línea de «ahora» la mueve el reloj.
+ * En el plan sólo va lo que hace falta para actuar en la próxima hora: cuándo,
+ * dónde y el plazo que manda. El resto vive en la página de cada parada, a un
+ * toque. No se marca nada: la línea de «ahora» la mueve el reloj.
  */
 export function dayScreen(state: AppState): string {
   const plan = state.plan;
@@ -117,12 +120,40 @@ export function dayScreen(state: AppState): string {
   if (!day) return NOT_FOUND;
 
   const lang = plan.primaryLanguage;
+  const tabs = DAY_TABS.map(
+    ([tab, label]) =>
+      `<button data-swap="${esc(routeHash({ ...route, tab }))}" aria-pressed="${route.tab === tab}">${label}</button>`,
+  ).join('');
+
+  const body =
+    route.tab === 'nearby'
+      ? nearbyBody(plan, route.tripId, day)
+      : route.tab === 'bookings'
+        ? bookingsBody(plan, day)
+        : planBody(state, plan, route.tripId, day);
+
+  return `${installBanner(state)}
+    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+      pick(plan.title, lang) ?? 'Trip',
+    )}</a>${pager(plan, route)}</div>
+    <p class="date">${esc(longDate(day.date, lang))}</p>
+    <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
+    <div class="tabs">${tabs}</div>
+    ${body}`;
+}
+
+const DAY_TABS: ReadonlyArray<readonly [DayTab, string]> = [
+  ['plan', 'Plan'],
+  ['nearby', 'Nearby'],
+  ['bookings', 'Bookings'],
+];
+
+function planBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
   // El reloj sólo dice algo el día en cuestión: mirar el 23 de diciembre desde
   // octubre no es ir seis horas tarde.
   const now = day.date === today(state.clock) ? nowMinutes(state.clock) : null;
-  const intro = pick(day.intro, lang);
+  const intro = pick(day.intro, plan.primaryLanguage);
   const schedule = computeSchedule(day);
-  const stay = plan.stays.find((st) => st.id === day.stay);
 
   const rows: string[] = [];
   let nowShown = now === null;
@@ -131,26 +162,141 @@ export function dayScreen(state: AppState): string {
       rows.push(nowLine(now!));
       nowShown = true;
     }
-    rows.push(stopRow(plan, route.tripId, day, stop, now));
+    rows.push(stopRow(plan, tripId, day, stop, now));
   }
   if (!nowShown && schedule.stops.length) rows.push(nowLine(now!));
 
-  return `${installBanner(state)}
-    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
-      pick(plan.title, lang) ?? 'Trip',
-    )}</a>${pager(plan, route)}</div>
-    <p class="date">${esc(longDate(day.date, lang))}</p>
-    <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
-    ${intro ? `<p class="lead">${esc(intro)}</p>` : ''}
+  return `${intro ? `<p class="lead">${esc(intro)}</p>` : ''}
     ${deadlinePanel(plan, day, schedule, now)}
-    ${rows.length ? `<ul class="days">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}
-    ${
-      stay
-        ? `<ul class="days"><li><button class="dayrow" data-go="${esc(
-            routeHash({ name: 'stay', tripId: route.tripId, dayId: day.id }),
-          )}"><b>Tonight</b><span class="grow">${esc(stay.name)}</span><span class="go">›</span></button></li></ul>`
-        : ''
-    }`;
+    ${rows.length ? `<ul class="days">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}`;
+}
+
+/* ── Por la zona ─────────────────────────────────────────────────────── */
+
+/** Categorías que no son «sitios que ver»: ya salen en el plan o en las reservas. */
+const NOT_SIGHTS = new Set(['lodging', 'transport']);
+
+/**
+ * Todo lo apuntado en la zona donde se duerme ese día, esté o no en el plan.
+ * Es el plan B: si algo está cerrado, llueve o no apetece, aquí hay de dónde tirar.
+ */
+function nearbyBody(plan: TripPayload, tripId: string, day: Day): string {
+  const area = plan.stays.find((st) => st.id === day.stay)?.area;
+  const places = Object.values(plan.places).filter(
+    (pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? ''),
+  );
+  if (!places.length) return '<p class="empty">No places listed for this area yet.</p>';
+
+  const row = (pl: Place) => {
+    const planned = plan.days.find((d) => d.waypoints.some((w) => w.place === pl.id));
+    const sub = [pl.category, planned ? `planned ${shortDate(planned.date)}` : ''].filter(Boolean).join(' · ');
+    return `<li><button class="dayrow" data-go="${esc(
+      routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }),
+    )}"><span class="grow">${esc(pl.name)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span><span class="go">›</span></button></li>`;
+  };
+  const group = (title: string, list: Place[]) =>
+    list.length ? `<h3 class="group">${title}</h3><ul class="days">${list.map(row).join('')}</ul>` : '';
+
+  const eat = places.filter((pl) => pl.category === 'food');
+  const see = places.filter((pl) => pl.category !== 'food');
+  return `<p class="meta">${esc(area!)}</p>${group('See and do', see)}${group('Eat', eat)}`;
+}
+
+/* ── Reservas ────────────────────────────────────────────────────────── */
+
+/** Lo que una tarjeta de reserva necesita, venga de `stays` o de `bookings`. */
+interface BookingCard {
+  date: string;
+  kind: string;
+  when: string;
+  title: string;
+  status?: Booking['status'];
+  ref?: string | null;
+  provider?: string | null;
+  place?: Place;
+  lines: string[];
+}
+
+function cardOfStay(plan: TripPayload, stay: Stay): BookingCard {
+  const lang = plan.primaryLanguage;
+  const place = stay.place ? plan.places[stay.place] : undefined;
+  return {
+    date: stay.from,
+    kind: 'Hotel',
+    when: `${shortDate(stay.from)} → ${shortDate(stay.to)}`,
+    title: stay.name,
+    ref: stay.confirmation,
+    place,
+    lines: [pick(stay.notes, lang), ...(place?.facts ?? []).map((f) => pick(f.text, lang))].filter(
+      (l): l is string => !!l,
+    ),
+  };
+}
+
+function cardOfBooking(plan: TripPayload, b: Booking): BookingCard {
+  const lang = plan.primaryLanguage;
+  return {
+    date: b.date,
+    kind: { flight: 'Flight', activity: 'Activity', transfer: 'Transfer' }[b.kind],
+    when: shortDate(b.date),
+    title: pick(b.title, lang) ?? b.id,
+    status: b.status,
+    ref: b.ref,
+    provider: b.provider,
+    place: b.place ? plan.places[b.place] : undefined,
+    lines: (b.lines ?? []).map((l) => pick(l, lang)).filter((l): l is string => !!l),
+  };
+}
+
+function bookingCard(c: BookingCard): string {
+  const phone = c.place?.contact?.phone;
+  const status =
+    c.status === 'todo'
+      ? '<p class="verdict bad">Not booked yet</p>'
+      : c.status === 'pending'
+        ? '<p class="verdict">Requested, not confirmed yet</p>'
+        : '';
+  return `<div class="panel">
+    <p class="meta">${esc(c.kind)} · ${esc(c.when)}</p>
+    <h3>${esc(c.title)}</h3>
+    ${c.ref ? `<p class="ref">${esc(c.ref)}</p>` : ''}
+    ${status}
+    <dl>
+      ${c.provider ? `<dt>With</dt><dd>${esc(c.provider)}</dd>` : ''}
+      ${c.place?.address ? `<dt>Address</dt><dd>${esc(c.place.address)}</dd>` : ''}
+      ${c.place?.addressLocal ? `<dt></dt><dd>${esc(c.place.addressLocal)}</dd>` : ''}
+      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
+    </dl>
+    ${c.lines.length ? `<ul>${c.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+/** Las reservas que hacen falta ese día: el vuelo, lo reservado y dónde se duerme. */
+function bookingsBody(plan: TripPayload, day: Day): string {
+  const cards = [
+    ...(plan.bookings ?? []).filter((b) => b.date === day.date).map((b) => cardOfBooking(plan, b)),
+    // El día de salida de un hotel también cuenta: hay que dejar la habitación.
+    ...plan.stays.filter((st) => st.from <= day.date && day.date <= st.to).map((st) => cardOfStay(plan, st)),
+  ];
+  return cards.length ? cards.map(bookingCard).join('') : '<p class="empty">No bookings for this day.</p>';
+}
+
+/** Todas las reservas del viaje, por fecha. */
+export function bookingsScreen(state: AppState): string {
+  const plan = state.plan;
+  const route = state.route;
+  if (!plan || route.name !== 'bookings') return NOT_FOUND;
+
+  const cards = [
+    ...(plan.bookings ?? []).map((b) => cardOfBooking(plan, b)),
+    ...plan.stays.map((st) => cardOfStay(plan, st)),
+  ].sort((x, y) => x.date.localeCompare(y.date));
+
+  return `<div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+    pick(plan.title, plan.primaryLanguage) ?? 'Trip',
+  )}</a></div>
+    <h1>Bookings</h1>
+    ${cards.length ? cards.map(bookingCard).join('') : '<p class="empty">No bookings yet.</p>'}`;
 }
 
 const NOT_FOUND = `<p class="empty">Day not found.</p>`;
@@ -269,9 +415,9 @@ const parseAnchor = (s: { waypoint: { anchor?: { time: string } | null } }): num
   return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 };
 
-/* ── Parada ──────────────────────────────────────────────────────────── */
+/* ── Parada y sitio ──────────────────────────────────────────────────── */
 
-/** Todo lo que se sabe de una parada: avisos arriba, datos, y la letra pequeña plegada. */
+/** Una parada del plan: el sitio, más su hora, su plazo y sus notas de ese día. */
 export function stopScreen(state: AppState): string {
   const plan = state.plan;
   const route = state.route;
@@ -284,7 +430,7 @@ export function stopScreen(state: AppState): string {
   const w = stop.waypoint;
   const place = plan.places[w.place];
   const back = `<div class="bar"><a class="back grow" href="${esc(
-    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id }),
+    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'plan' }),
   )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
   if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
 
@@ -311,8 +457,56 @@ export function stopScreen(state: AppState): string {
     }</p>`;
   }
 
-  const notes = w.notes ?? [];
-  const warnings = notes
+  const choices = (w.choices ?? [])
+    .map((id) => plan.places[id])
+    .filter((pl): pl is Place => !!pl)
+    .map(
+      (pl) => `<li><button class="dayrow" data-go="${esc(
+        routeHash({ name: 'place', tripId: route.tripId, dayId: day.id, placeId: pl.id }),
+      )}"><span class="grow">${esc(pl.name)}${
+        pl.address ? `<span class="sub">${esc(pl.address)}</span>` : ''
+      }</span><span class="go">›</span></button></li>`,
+    )
+    .join('');
+
+  return `${back}
+    ${placeDetail(place, day, lang, {
+      under: `<p class="meta">${esc(when)}${esc(travel)}</p>${anchor}${conflict}`,
+      notes: w.notes ?? [],
+      after: choices ? `<h3 class="group">Options</h3><ul class="days">${choices}</ul>` : '',
+    })}`;
+}
+
+/** Un sitio de la zona que no está (o no sólo) en el plan de ese día. */
+export function placeScreen(state: AppState): string {
+  const plan = state.plan;
+  const route = state.route;
+  if (!plan || route.name !== 'place') return NOT_FOUND;
+  const day = plan.days.find((d) => d.id === route.dayId);
+  const place = plan.places[route.placeId];
+  if (!day || !place) return NOT_FOUND;
+
+  // Se vuelve con el «atrás» del navegador: a un sitio se llega desde la
+  // pestaña de la zona o desde las opciones de una parada.
+  return `<div class="bar"><button class="back" data-act="back">‹ Back</button></div>
+    ${placeDetail(place, day, plan.primaryLanguage, { under: '', notes: [], after: '' })}`;
+}
+
+/** Lo común a parada y sitio: foto, avisos, descripción, datos y letra pequeña plegada. */
+function placeDetail(
+  place: Place,
+  day: Day,
+  lang: string,
+  extra: { under: string; notes: Note[]; after: string },
+): string {
+  // Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red.
+  const photo = place.photo?.src.startsWith('data:image/')
+    ? `<figure class="photo"><img src="${esc(place.photo.src)}" alt="">${
+        place.photo.credit ? `<figcaption>${esc(place.photo.credit)}</figcaption>` : ''
+      }</figure>`
+    : '';
+
+  const warnings = extra.notes
     .filter((n) => n.type === 'warn')
     .map((n) => `<p class="verdict">${esc(pick(n.text, lang) ?? '')}</p>`)
     .join('');
@@ -320,7 +514,7 @@ export function stopScreen(state: AppState): string {
   const about = pick(place.deep, lang);
 
   const fineprint = [
-    ...notes.filter((n) => n.type !== 'warn').map((n) => `<li>${esc(pick(n.text, lang) ?? '')}</li>`),
+    ...extra.notes.filter((n) => n.type !== 'warn').map((n) => `<li>${esc(pick(n.text, lang) ?? '')}</li>`),
     ...(place.facts ?? []).map(
       (f) =>
         `<li>${esc(pick(f.text, lang) ?? '')}${
@@ -333,22 +527,13 @@ export function stopScreen(state: AppState): string {
     ),
   ];
 
-  // Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red.
-  const photo = place.photo?.src.startsWith('data:image/')
-    ? `<figure class="photo"><img src="${esc(place.photo.src)}" alt="">${
-        place.photo.credit ? `<figcaption>${esc(place.photo.credit)}</figcaption>` : ''
-      }</figure>`
-    : '';
-
-  return `${back}
-    ${photo}
+  return `${photo}
     <h1>${esc(place.name)}</h1>
     ${place.nameLocal && place.nameLocal !== place.name ? `<p class="lead">${esc(place.nameLocal)}</p>` : ''}
-    <p class="meta">${esc(when)}${esc(travel)}</p>
-    ${anchor}
-    ${conflict}
+    ${extra.under}
     ${warnings}
     ${about ? `<p class="lead">${esc(about)}</p>` : ''}
+    ${extra.after}
     ${placeFacts(place, day, lang)}
     ${
       fineprint.length
@@ -386,36 +571,6 @@ function placeFacts(place: Place, day: Day, lang: string): string {
 
   if (!rows.length && !costNote) return '';
   return `<div class="panel"><dl>${rows.join('')}</dl>${costNote ? `<p class="meta">${esc(costNote)}</p>` : ''}</div>`;
-}
-
-/* ── Alojamiento ─────────────────────────────────────────────────────── */
-
-export function stayScreen(state: AppState): string {
-  const plan = state.plan;
-  const route = state.route;
-  if (!plan || route.name !== 'stay') return NOT_FOUND;
-  const day = plan.days.find((d) => d.id === route.dayId);
-  const stay = day && plan.stays.find((s) => s.id === day.stay);
-  if (!day || !stay) return NOT_FOUND;
-
-  const lang = plan.primaryLanguage;
-  const place = stay.place ? plan.places[stay.place] : undefined;
-  const phone = place?.contact?.phone;
-  const notes = pick(stay.notes, lang);
-  const facts = (place?.facts ?? []).map((f) => `<li>${esc(pick(f.text, lang) ?? '')}</li>`).join('');
-
-  return `<div class="bar"><a class="back" href="${esc(
-    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id }),
-  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a></div>
-    <h1>${esc(stay.name)}</h1>
-    <p class="meta">${esc(shortDate(stay.from))} → ${esc(shortDate(stay.to))}</p>
-    <div class="panel"><dl>
-      ${place?.address ? `<dt>Address</dt><dd>${esc(place.address)}</dd>` : ''}
-      ${place?.addressLocal ? `<dt></dt><dd>${esc(place.addressLocal)}</dd>` : ''}
-      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
-      ${stay.confirmation ? `<dt>Booking</dt><dd>${esc(stay.confirmation)}</dd>` : ''}
-    </dl></div>
-    ${notes || facts ? `<div class="panel">${notes ? `<p>${esc(notes)}</p>` : ''}${facts ? `<ul>${facts}</ul>` : ''}</div>` : ''}`;
 }
 
 /* ── Ajustes y spike (§8.4, §12.3) ───────────────────────────────────── */

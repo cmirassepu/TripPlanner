@@ -77,6 +77,11 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .chip[aria-pressed=true]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 .back{color:var(--accent);font-size:.9rem}
 .back.grow{flex:1}
+.tabs{display:flex;gap:.3rem;margin:.8rem 0 1rem;padding:.25rem;background:var(--card);border-radius:.7rem}
+.tabs button{flex:1;padding:.45rem 0;border-radius:.5rem;font-size:.85rem;font-weight:600;color:var(--muted)}
+.tabs button[aria-pressed=true]{background:var(--accent);color:var(--bg)}
+.group{margin:1.2rem 0 0;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.panel .ref{margin:.3rem 0;font-size:1.5rem;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums;user-select:all;-webkit-user-select:all}
 .chip.off{opacity:.3}
 
 .install{position:sticky;top:0;z-index:10;margin:0 0 1rem;padding:.7rem .9rem;background:var(--warn-bg);color:var(--warn);border-radius:.6rem;font-size:.85rem;line-height:1.4}

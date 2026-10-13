@@ -64,6 +64,11 @@ export interface Place {
   address?: string | null;
   addressLocal?: string | null;
   category?: string | null;
+  /**
+   * Zona a la que pertenece, con el mismo texto que `Stay.area`. Es lo que
+   * permite listar «qué hay por aquí» aunque el sitio no esté en ningún día.
+   */
+  area?: string | null;
   hours: Hours;
   cost?: Cost | null;
   contact?: { phone?: string | null; url?: string | null } | null;
@@ -120,6 +125,11 @@ export interface Waypoint {
   dropRank?: number | null;
   anchor?: Anchor | null;
   notes?: Note[];
+  /**
+   * Sitios entre los que elegir sobre la marcha. Sirve para un hueco sin sitio
+   * fijo: «comer por aquí» apunta a un sitio genérico y ofrece estos.
+   */
+  choices?: string[];
 }
 
 /**
@@ -152,6 +162,30 @@ export interface Stay {
   timezone?: string | null;
   confirmation?: string | null;
   notes?: Localized | null;
+  /** Zona del alojamiento. Los sitios con la misma `area` son los de alrededor. */
+  area?: string | null;
+}
+
+export type BookingKind = 'flight' | 'activity' | 'transfer';
+
+/**
+ * Una reserva que no es un alojamiento (ésos ya viven en `stays`). Los datos
+ * van en campos, no en frases, para poder enseñar la referencia en grande y
+ * juntar todas las reservas del viaje en una lista.
+ */
+export interface Booking {
+  id: string;
+  kind: BookingKind;
+  title: Localized;
+  /** ISO YYYY-MM-DD: el día en que hace falta. */
+  date: string;
+  /** `todo` = sin reservar todavía. `pending` = pedida, sin confirmar. */
+  status?: 'confirmed' | 'pending' | 'todo';
+  ref?: string | null;
+  provider?: string | null;
+  /** Referencia a `places`: de ahí salen la dirección y el teléfono. */
+  place?: string | null;
+  lines?: Localized[];
 }
 
 export interface TripPayload {
@@ -164,6 +198,7 @@ export interface TripPayload {
   currency: string;
   travellers?: { adults: number; children: number; dogs: number };
   stays: Stay[];
+  bookings?: Booking[];
   places: Record<string, Place>;
   days: Day[];
 }

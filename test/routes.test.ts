@@ -24,9 +24,11 @@ describe('rutas', () => {
       { name: 'library' },
       { name: 'settings' },
       { name: 'trip', tripId },
-      { name: 'day', tripId, dayId: first.id },
+      { name: 'day', tripId, dayId: first.id, tab: 'plan' },
+      { name: 'day', tripId, dayId: first.id, tab: 'bookings' },
       { name: 'stop', tripId, dayId: first.id, waypointId: first.waypoints[0].id },
-      { name: 'stay', tripId, dayId: first.id },
+      { name: 'place', tripId, dayId: first.id, placeId: first.waypoints[0].place },
+      { name: 'bookings', tripId },
     ];
     for (const route of routes) assert.deepEqual(parseRoute(routeHash(route)), route);
   });
@@ -34,9 +36,14 @@ describe('rutas', () => {
 
 describe('vecinas', () => {
   test('un día tiene a los lados el día anterior y el siguiente', () => {
-    const { prev, next } = neighbours(plan, { name: 'day', tripId, dayId: first.id });
+    const { prev, next } = neighbours(plan, { name: 'day', tripId, dayId: first.id, tab: 'plan' });
     assert.equal(prev, null, 'el primer día no tiene anterior');
-    assert.deepEqual(next, { name: 'day', tripId, dayId: second.id });
+    assert.deepEqual(next, { name: 'day', tripId, dayId: second.id, tab: 'plan' });
+  });
+
+  test('al pasar de día se conserva la pestaña', () => {
+    const { next } = neighbours(plan, { name: 'day', tripId, dayId: first.id, tab: 'bookings' });
+    assert.deepEqual(next, { name: 'day', tripId, dayId: second.id, tab: 'bookings' });
   });
 
   test('una parada tiene a los lados las del mismo día, y no salta de día', () => {
@@ -50,6 +57,6 @@ describe('vecinas', () => {
 
   test('las pantallas sin vecinas no ofrecen ninguna', () => {
     assert.deepEqual(neighbours(plan, { name: 'trip', tripId }), { prev: null, next: null });
-    assert.deepEqual(neighbours(plan, { name: 'stay', tripId, dayId: first.id }), { prev: null, next: null });
+    assert.deepEqual(neighbours(plan, { name: 'bookings', tripId }), { prev: null, next: null });
   });
 });

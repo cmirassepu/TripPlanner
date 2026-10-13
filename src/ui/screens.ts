@@ -235,21 +235,32 @@ function deadlinePanel(plan: TripPayload, day: Day, schedule: Schedule, now: num
     </div>`;
   }
 
+  // En grande va siempre la hora del plazo: la de salida del vuelo, no la del
+  // cierre de facturación. Debajo, a qué hora hay que estar allí y, el día en
+  // cuestión, cuánto falta.
+  const at = parseAnchor(next);
+  const place = plan.places[next.waypoint.place]?.name ?? next.waypoint.place;
+  const beThere =
+    next.waypoint.anchor!.type === 'departure' && next.arrive < at
+      ? `Be at ${place} by ${formatClock(next.arrive)}`
+      : '';
+
   if (now === null) {
     return `<div class="panel">
       <p class="meta">${esc(label(next))}</p>
       ${big(next.waypoint.anchor!.time)}
-      <p class="verdict ok">The plan starts at ${esc(day.startTime)}</p>
+      <p class="verdict ok">${esc(beThere || `The plan starts at ${day.startTime}`)}</p>
     </div>`;
   }
 
-  const at = parseAnchor(next);
   const left = at - now;
   const urgent = left <= 30;
   return `<div class="panel">
     <p class="meta">${esc(label(next))}</p>
-    ${big(formatDuration(left))}
-    <p class="verdict ${urgent ? 'bad' : 'ok'}">${urgent ? 'Go now.' : `Until ${esc(formatClock(at))}`}</p>
+    ${big(next.waypoint.anchor!.time)}
+    <p class="verdict ${urgent ? 'bad' : 'ok'}">${esc(
+      [`${formatDuration(left)} to go`, beThere].filter(Boolean).join(' · '),
+    )}</p>
   </div>`;
 }
 

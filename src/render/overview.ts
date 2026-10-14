@@ -207,8 +207,10 @@ function renderNotes(list) {
   const all = document.querySelector('.note-all');
   all.replaceChildren(...list.map((n) => noteItem(n, true)));
   for (const n of list) {
-    const slot = document.querySelector('.note-slot[data-target="' + CSS.escape(n.target || 'general') + '"] .note-here');
-    if (slot && n.target !== 'general') slot.append(noteItem(n, false));
+    // Un sitio sale en varios sitios de la página (como opción de comida y en su zona): la nota, en todos.
+    if (n.target === 'general') continue;
+    document.querySelectorAll('.note-slot[data-target="' + CSS.escape(n.target) + '"] .note-here')
+      .forEach((ul) => ul.append(noteItem(n, false)));
   }
   const open = list.filter((n) => n.status !== 'done').length;
   const nav = document.querySelector('a[href="#notes"]');
@@ -365,7 +367,10 @@ function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): strin
         .map((n) => `<li class="${n.type === 'warn' ? 'warn' : ''}">${esc(pick(n.text, lang) ?? '')}</li>`)
         .join('');
       const options = choices
-        .map((p) => `<details class="choice"><summary>${esc(p.name)}</summary>${placeBody(plan, p, lang)}</details>`)
+        .map(
+          (p) =>
+            `<details class="choice"><summary>${esc(p.name)}</summary>${noteSlot(`p-${p.id}`, p.name)}${placeBody(plan, p, lang)}</details>`,
+        )
         .join('');
       return `<li><details class="stop"><summary>${head}</summary><div class="stop-body">
         ${timing.length ? `<p class="timing">${esc(timing.join(' · '))}</p>` : ''}

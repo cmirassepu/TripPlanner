@@ -13,7 +13,8 @@
     "sevilla": "node scripts/sevilla.ts",
     "build": "node scripts/build.ts",
     "serve": "node scripts/serve.ts",
-    "check": "node scripts/check.ts"
+    "check": "node scripts/check.ts",
+    "overview": "node scripts/overview.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

@@ -87,6 +87,8 @@ export interface Place {
     wikipedia?: Localized | null;
     official?: string | null;
     maps?: string | null;
+    /** Dónde sale en la guía de viaje, p. ej. «Bangkok › Chinatown and Pahurat › Wat Traimit». */
+    guide?: string | null;
   } | null;
 }
 

@@ -99,11 +99,18 @@ export function renderOverview(plan: TripPayload, opts: OverviewOptions = {}): s
     </p>
   </div>
   <nav class="jump">
-    <a href="#days">Days</a><a href="#ideas">Optional changes</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
+    <a href="#notes" class="needs-notes" hidden>Notes</a><a href="#days">Days</a><a href="#ideas">Optional changes</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
   </nav>
 </header>
 
 ${routeStrip(legs)}
+
+<section id="notes" class="needs-notes" hidden>
+  <h2>Notes for Claude</h2>
+  <p class="lede">Leave a note on any day, stop or place with its “Note” button, or a general one here. Claude reads them, updates the plan and replies.</p>
+  ${noteSlot('general', 'General')}
+  <ul class="note-all"></ul>
+</section>
 
 <section id="days">
   <h2>Days <span class="tools"><button type="button" data-all="open" data-in="days">Open all</button><button type="button" data-all="close" data-in="days">Close all</button></span></h2>
@@ -163,6 +170,95 @@ document.addEventListener('click', (e) => {
   target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
   back.hidden = false;
 });
+// ── Notas para Claude: se guardan en la base de datos de la página ──
+const NOTE_STATUS = { new: 'New', seen: 'Seen', done: 'Done' };
+let notesCol = null;
+function noteItem(n, withPlace) {
+  const li = document.createElement('li');
+  li.className = 'note ' + (n.status || 'new');
+  const head = document.createElement('div');
+  head.className = 'note-head';
+  if (withPlace) {
+    const where = n.target && n.target !== 'general' && document.getElementById(n.target) ? document.createElement('a') : document.createElement('b');
+    if (where.tagName === 'A') where.href = '#' + n.target;
+    where.textContent = n.label || 'General';
+    head.append(where);
+  }
+  const pill = document.createElement('span');
+  pill.className = 'pill ' + (n.status === 'done' ? 'planned' : n.status === 'seen' ? 'travel' : 'outline');
+  pill.textContent = NOTE_STATUS[n.status] || 'New';
+  const rm = document.createElement('button');
+  rm.type = 'button'; rm.className = 'note-rm'; rm.textContent = 'Remove';
+  rm.addEventListener('click', () => notesCol.doc(n.id).delete().catch(() => {}));
+  head.append(pill, rm);
+  const text = document.createElement('p');
+  text.textContent = n.text;
+  li.append(head, text);
+  if (n.reply) {
+    const r = document.createElement('p');
+    r.className = 'note-reply';
+    r.textContent = 'Claude: ' + n.reply;
+    li.append(r);
+  }
+  return li;
+}
+function renderNotes(list) {
+  document.querySelectorAll('.note-here').forEach((ul) => ul.replaceChildren());
+  const all = document.querySelector('.note-all');
+  all.replaceChildren(...list.map((n) => noteItem(n, true)));
+  for (const n of list) {
+    const slot = document.querySelector('.note-slot[data-target="' + CSS.escape(n.target || 'general') + '"] .note-here');
+    if (slot && n.target !== 'general') slot.append(noteItem(n, false));
+  }
+  const open = list.filter((n) => n.status !== 'done').length;
+  const nav = document.querySelector('a[href="#notes"]');
+  nav.textContent = open ? 'Notes (' + open + ')' : 'Notes';
+}
+function openComposer(slot) {
+  if (slot.querySelector('form')) return;
+  const form = document.createElement('form');
+  form.className = 'note-form';
+  const ta = document.createElement('textarea');
+  ta.rows = 3; ta.placeholder = 'What should change, or what to look into?';
+  const save = document.createElement('button');
+  save.type = 'submit'; save.textContent = 'Save note';
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.textContent = 'Cancel';
+  const msg = document.createElement('span');
+  msg.className = 'note-msg';
+  cancel.addEventListener('click', () => form.remove());
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = ta.value.trim();
+    if (!text) return;
+    save.disabled = true; msg.textContent = 'Saving…';
+    try {
+      await notesCol.add({ target: slot.dataset.target, label: slot.dataset.label, text, status: 'new', createdAt: new Date().toISOString() });
+      form.remove();
+    } catch (err) {
+      save.disabled = false;
+      msg.textContent = err && err.code === 'quota_exceeded' ? 'Too many notes stored: remove some done ones first.' : 'Could not save. Try again.';
+    }
+  });
+  form.append(ta, save, cancel, msg);
+  slot.querySelector('.note-btn').after(form);
+  ta.focus();
+}
+(async () => {
+  const db = window.claude && (await window.claude.use('db'));
+  if (!db) return;
+  notesCol = db.collection('notes');
+  document.querySelectorAll('.needs-notes').forEach((el) => { el.hidden = false; });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.note-btn');
+    if (b) openComposer(b.closest('.note-slot'));
+  });
+  notesCol.orderBy('createdAt').onSnapshot(
+    (snap) => renderNotes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => {},
+  );
+})();
+
 back.addEventListener('click', () => {
   window.scrollTo(0, trail.pop() ?? 0);
   back.hidden = trail.length === 0;
@@ -238,13 +334,14 @@ function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): strin
   }
 
   const intro = pick(day.intro, lang);
+  const dayLabel = `${weekday(day.date)} ${dayMonth(day.date)}`;
   // Los cambios que se barajan para este día, plegados dentro del propio día.
   const dayIdeas = mine.length
     ? `<div class="day-ideas"><p class="lbl">Optional changes for this day</p>${mine.map((i) => ideaCard(plan, i, false)).join('')}</div>`
     : '';
   if (status === 'outline') {
     return `<li id="${esc(day.id)}" class="day outline"><details><summary class="sum">${summary}</summary>
-    <div class="detail"><p class="intro">${esc(intro ?? '')}</p>${dayIdeas}</div></details></li>`;
+    <div class="detail"><p class="intro">${esc(intro ?? '')}</p>${dayIdeas}${noteSlot(day.id, dayLabel)}</div></details></li>`;
   }
 
   const schedule = computeSchedule(day);
@@ -273,6 +370,7 @@ function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): strin
       return `<li><details class="stop"><summary>${head}</summary><div class="stop-body">
         ${timing.length ? `<p class="timing">${esc(timing.join(' · '))}</p>` : ''}
         ${notes ? `<ul class="notes">${notes}</ul>` : ''}
+        ${noteSlot(w.id, `${dayLabel} · ${formatClock(arrive)} ${place?.name ?? w.place}`)}
         ${place ? placeBody(plan, place, lang) : ''}
         ${options ? `<div class="options"><p class="lbl">Options</p>${options}</div>` : ''}
       </div></details></li>`;
@@ -280,7 +378,7 @@ function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): strin
     .join('');
 
   return `<li id="${esc(day.id)}" class="day ${status}"><details><summary class="sum">${summary}</summary>
-    <div class="detail">${intro ? `<p class="intro">${esc(intro)}</p>` : ''}${dayIdeas}<ol class="stops">${stops}</ol></div>
+    <div class="detail">${intro ? `<p class="intro">${esc(intro)}</p>` : ''}${dayIdeas}${noteSlot(day.id, dayLabel)}<ol class="stops">${stops}</ol></div>
   </details></li>`;
 }
 
@@ -394,8 +492,22 @@ function placeRow(plan: TripPayload, p: Place, usage: Map<string, Day[]>): strin
     .join('');
   return `<li id="p-${esc(p.id)}"><details class="place">
     <summary class="ph"><span class="cat">${esc(CATEGORY_LABEL[p.category ?? ''] ?? p.category ?? '')}</span><b>${esc(p.name)}</b>${days}</summary>
+    ${noteSlot(`p-${p.id}`, p.name)}
     ${placeBody(plan, p, lang)}
   </details></li>`;
+}
+
+/**
+ * Hueco para dejarle una nota a Claude sobre un día, una parada o un sitio.
+ * Va oculto: el script solo lo enseña cuando la página tiene dónde guardar
+ * las notas (publicada en claude.ai con la base de datos), así que la página
+ * suelta o impresa no cambia.
+ */
+function noteSlot(target: string, label: string): string {
+  return `<div class="note-slot needs-notes" hidden data-target="${esc(target)}" data-label="${esc(label)}">
+    <ul class="note-here"></ul>
+    <button type="button" class="note-btn">✎ Note for Claude</button>
+  </div>`;
 }
 
 /** Lo que se sabe de un sitio: descripción, enlaces, guía y lo que falta. Sale igual en el día y en la zona. */
@@ -743,6 +855,21 @@ summary{cursor:pointer}
 .back[hidden]{display:none}
 .flash{animation:flash 1.6s ease-out}
 @keyframes flash{0%,40%{outline:2px solid var(--accent);outline-offset:2px}100%{outline:2px solid transparent;outline-offset:2px}}
+.note-slot{display:grid;gap:6px;justify-items:start;margin:4px 0 8px}
+.note-btn,.note-form button,.note-rm{font:600 .78rem var(--sans);color:var(--accent);background:transparent;border:1px dashed var(--accent);border-radius:99px;padding:2px 10px;cursor:pointer}
+.note-form{display:grid;gap:6px;grid-template-columns:auto auto 1fr;width:100%;max-width:36rem}
+.note-form textarea{grid-column:1/-1;font:inherit;font-size:.9rem;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+.note-form button[type=submit]{background:var(--accent);color:var(--card);border-style:solid}
+.note-msg{font-size:.82rem;color:var(--warn);align-self:center}
+.note-here,.note-all{list-style:none;margin:0;padding:0;display:grid;gap:6px;width:100%}
+.note-all{margin-top:10px}
+.note{background:var(--warn-bg);border-radius:6px;padding:6px 10px;max-width:40rem}
+.note.done{background:var(--card);border:1px solid var(--line)}
+.note p{margin:2px 0 0;font-size:.9rem;white-space:pre-wrap}
+.note-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:.85rem}
+.note-rm{margin-left:auto;border:0;padding:0 4px;color:var(--muted)}
+.note-reply{color:var(--muted)}
+#notes .note-slot{margin-top:0}
 @media (max-width:560px){
   .stop-body{margin-left:0}
   .sum{grid-template-columns:1fr auto;gap:2px 10px}

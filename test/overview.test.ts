@@ -48,4 +48,14 @@ describe('vista general', () => {
     assert.doesNotMatch(out, /<b>x<\/b>/);
     assert.match(out, /Rough Guide: &quot;&gt;&lt;b&gt;x/);
   });
+
+  test('los cambios opcionales salen con su día y marcados en ese día', () => {
+    const d = trip.payload.days[0];
+    const out = renderOverview(trip.payload, {
+      ideas: [{ id: 'x', title: 'Boat <trip>', date: d.date, replaces: 'Lunch', status: 'idea' }],
+    });
+    assert.match(out, /id="idea-x"/);
+    assert.match(out, /Boat &lt;trip&gt;/);
+    assert.match(out, /1 optional change</);
+  });
 });

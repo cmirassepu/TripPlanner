@@ -21,6 +21,24 @@ export interface OverviewOptions {
   generatedAt?: string;
   /** Versión del archivo de viaje de la que sale. */
   version?: number;
+  /** Cambios opcionales que se están pensando; viven fuera del archivo de viaje. */
+  ideas?: Idea[];
+}
+
+/**
+ * Un cambio que se baraja pero no está decidido. No forma parte del formato del
+ * viaje: es una lista de trabajo que se guarda al lado del archivo.
+ */
+export interface Idea {
+  id: string;
+  title: string;
+  /** Día al que afectaría, ISO. `null` si no tiene día. */
+  date: string | null;
+  replaces?: string | null;
+  why?: string | null;
+  cost?: string | null;
+  status?: 'idea' | 'accepted' | 'dropped';
+  source?: string | null;
 }
 
 /** `outline` = día sin paradas pero con la idea escrita en `intro`. */
@@ -73,7 +91,7 @@ export function renderOverview(plan: TripPayload, opts: OverviewOptions = {}): s
     </p>
   </div>
   <nav class="jump">
-    <a href="#days">Days</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
+    <a href="#days">Days</a><a href="#ideas">Optional changes</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
   </nav>
 </header>
 
@@ -81,8 +99,10 @@ ${routeStrip(legs)}
 
 <section id="days">
   <h2>Days</h2>
-  ${legs.map((leg) => legBlock(plan, leg, lang)).join('\n')}
+  ${legs.map((leg) => legBlock(plan, leg, lang, opts.ideas ?? [])).join('\n')}
 </section>
+
+${ideasBlock(plan, opts.ideas ?? [])}
 
 <section id="places">
   <h2>Places</h2>
@@ -148,18 +168,20 @@ function routeStrip(legs: Leg[]): string {
   return `<ol class="route" aria-label="Route">${items}</ol>`;
 }
 
-function legBlock(plan: TripPayload, leg: Leg, lang: string): string {
+function legBlock(plan: TripPayload, leg: Leg, lang: string, ideas: Idea[]): string {
   const s = leg.stay;
   const head = s
     ? `<h3>${esc(leg.area)}</h3><p class="leg-meta">${esc(dayMonth(s.from))} – ${esc(dayMonth(s.to))} · ${esc(s.name)}</p>`
     : `<h3>${esc(leg.area)}</h3>`;
-  return `<div class="leg">${head}<ol class="days">${leg.days.map((d) => dayRow(plan, d, lang)).join('')}</ol></div>`;
+  return `<div class="leg">${head}<ol class="days">${leg.days.map((d) => dayRow(plan, d, lang, ideas)).join('')}</ol></div>`;
 }
 
-function dayRow(plan: TripPayload, day: Day, lang: string): string {
+function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): string {
   const status = dayStatus(day);
+  const open = ideas.filter((i) => i.date === day.date && (i.status ?? 'idea') === 'idea').length;
+  const ideaTag = open ? ` <a class="tag idea" href="#ideas">${open} optional change${open === 1 ? '' : 's'}</a>` : '';
   const summary = `<span class="when"><b>${esc(weekday(day.date))}</b> ${esc(dayMonth(day.date))}</span>
-      <span class="what">${esc(pick(day.title, lang) ?? day.id)}</span>
+      <span class="what">${esc(pick(day.title, lang) ?? day.id)}${ideaTag}</span>
       <span class="pill ${status}">${STATUS_LABEL[status]}</span>`;
 
   if (status === 'open') {
@@ -198,6 +220,34 @@ function dayRow(plan: TripPayload, day: Day, lang: string): string {
 /** El nombre lleva a la ficha del sitio en la sección de sitios. */
 function placeName(p: Place): string {
   return `<a href="#p-${esc(p.id)}">${esc(p.name)}</a>`;
+}
+
+/* ── cambios opcionales ──────────────────────────────────────────────── */
+
+const IDEA_STATUS: Record<string, string> = { idea: 'To decide', accepted: 'Accepted', dropped: 'Dropped' };
+
+function ideasBlock(plan: TripPayload, ideas: Idea[]): string {
+  const order = (i: Idea) => (i.status === 'dropped' ? 2 : i.status === 'accepted' ? 1 : 0);
+  const sorted = [...ideas].sort((a, b) => order(a) - order(b) || (a.date ?? '9').localeCompare(b.date ?? '9'));
+  const rows = sorted
+    .map((i) => {
+      const day = i.date ? plan.days.find((d) => d.date === i.date) : null;
+      const when = day
+        ? `<a href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
+        : 'Any day';
+      const st = i.status ?? 'idea';
+      const line = (label: string, v?: string | null) => (v ? `<p><span class="lbl">${label}</span> ${esc(v)}</p>` : '');
+      return `<li id="idea-${esc(i.id)}" class="idea ${st}">
+      <div class="ih"><span class="when">${when}</span><b>${esc(i.title)}</b><span class="pill ${st === 'idea' ? 'outline' : st === 'accepted' ? 'planned' : 'open'}">${IDEA_STATUS[st] ?? st}</span></div>
+      ${line('Instead of', i.replaces)}${line('Why', i.why)}${line('Cost', i.cost)}${line('From', i.source)}
+    </li>`;
+    })
+    .join('');
+  return `<section id="ideas">
+  <h2>Optional changes</h2>
+  <p class="lede">Ideas on the table, not in the plan yet. Each one says which day it would change and what it would replace.</p>
+  ${rows ? `<ul class="ideas">${rows}</ul>` : '<p class="lede">None yet.</p>'}
+</section>`;
 }
 
 /* ── sitios ──────────────────────────────────────────────────────────── */
@@ -553,6 +603,15 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .sub{display:block;font-size:.82rem;color:var(--muted)}
 .kind{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .todo{display:grid;gap:10px}
+.ideas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.idea{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:2px}
+.idea.dropped{opacity:.55}
+.idea:target{outline:2px solid var(--accent);outline-offset:2px}
+.ih{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.ih .pill{margin-left:auto}
+.idea p{margin:0;font-size:.9rem;color:var(--muted);max-width:70ch}
+.lbl{display:inline-block;min-width:5.5rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
+.tag.idea{margin-left:8px;color:var(--outline-ink);border-color:var(--outline)}
 .todo>li{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .sublist{margin:6px 0 0;padding-left:18px;display:grid;gap:2px;font-size:.9rem}
 @media (max-width:560px){

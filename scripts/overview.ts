@@ -7,15 +7,15 @@
  * `<!doctype>`, que lo pone la publicación). Con él, una página completa para
  * abrirla como archivo. Antes de generar se valida: con errores no sale nada.
  *
- * Si junto al archivo hay un `<nombre>.ideas.json` (lista de cambios opcionales),
- * también sale en la página.
+ * Si junto al archivo hay un `<nombre>.ideas.json` (lista de cambios opcionales)
+ * o un `<nombre>.todo.json` (tareas propias), también salen en la página.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import type { TripFile } from '../src/model/types.ts';
 import { validateFile } from '../src/validate/validate.ts';
-import { renderOverview, wrapPage, type Idea } from '../src/render/overview.ts';
+import { renderOverview, wrapPage, type Idea, type Task } from '../src/render/overview.ts';
 
 const [input, output] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const standalone = process.argv.includes('--standalone');
@@ -35,8 +35,12 @@ const trip = raw as TripFile;
 // Hora local del ordenador, que es la que se lee en la página.
 const now = new Date();
 const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString();
-const ideasPath = input.replace(/\.trip\.json$/, '.ideas.json');
-const ideas: Idea[] = ideasPath !== input && existsSync(ideasPath) ? JSON.parse(readFileSync(ideasPath, 'utf8')) : [];
-const body = renderOverview(trip.payload, { generatedAt: local, version: trip.version, ideas });
+const sibling = <T>(ext: string): T[] => {
+  const path = input.replace(/\.trip\.json$/, ext);
+  return path !== input && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : [];
+};
+const ideas = sibling<Idea>('.ideas.json');
+const tasks = sibling<Task>('.todo.json');
+const body = renderOverview(trip.payload, { generatedAt: local, version: trip.version, ideas, tasks });
 writeFileSync(output, standalone ? wrapPage(body) : body);
 console.log(`Vista general escrita en ${output}${ideas.length ? ` (${ideas.length} cambios opcionales)` : ''}`);

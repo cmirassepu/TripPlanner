@@ -23,6 +23,14 @@ export interface OverviewOptions {
   version?: number;
   /** Cambios opcionales que se están pensando; viven fuera del archivo de viaje. */
   ideas?: Idea[];
+  /** Tareas propias que no salen del archivo de viaje (p. ej. «hacer el GPT de Agatka»). */
+  tasks?: Task[];
+}
+
+export interface Task {
+  text: string;
+  /** Cuándo hacerla, en texto libre: «Sunday 18 Oct», «later». */
+  when?: string | null;
 }
 
 /**
@@ -117,7 +125,7 @@ ${ideasBlock(plan, opts.ideas ?? [])}
 
 <section id="todo">
   <h2>To do</h2>
-  ${todoBlock(plan, lang)}
+  ${todoBlock(plan, lang, opts.tasks ?? [])}
 </section>
 </div>`;
 }
@@ -392,8 +400,10 @@ function bookingRow(plan: TripPayload, b: Booking, lang: string): string {
 
 /* ── lo que falta ────────────────────────────────────────────────────── */
 
-function todoBlock(plan: TripPayload, lang: string): string {
-  const items: string[] = [];
+function todoBlock(plan: TripPayload, lang: string, tasks: Task[]): string {
+  const items: string[] = tasks.map(
+    (t) => `<li><b>${esc(t.text)}</b>${t.when ? ` <span class="tag">${esc(t.when)}</span>` : ''}</li>`,
+  );
 
   const open = plan.days.filter((d) => dayStatus(d) === 'open');
   const outline = plan.days.filter((d) => dayStatus(d) === 'outline');

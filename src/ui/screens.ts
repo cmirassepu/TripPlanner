@@ -581,7 +581,7 @@ function placeDetail(
     ${about ? `<p class="lead">${esc(about)}</p>` : ''}
     ${extra.after}
     ${placeFacts(place, day, lang)}
-    ${mapsLink(place)}
+    ${placeLinks(place, lang)}
     ${
       fineprint.length
         ? `<details class="panel"><summary>Good to know · ${fineprint.length}</summary><ul>${fineprint.join('')}</ul></details>`
@@ -594,17 +594,37 @@ function placeDetail(
  * por nombre y zona, no por coordenadas: unas coordenadas abren un punto en el
  * mapa, no la ficha del sitio.
  */
-function mapsLink(place: Place): string {
+function mapsUrl(place: Place): string | null {
   // Un hueco genérico («comer por aquí») no es un sitio que buscar.
-  if (!place.links?.maps && !place.coords && !place.address && !place.area) return '';
+  if (!place.links?.maps && !place.coords && !place.address && !place.area) return null;
   const name = place.name.replace(/\s*\(.*?\)\s*/g, ' ').trim();
-  const url =
+  return (
     place.links?.maps ??
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
       [name, place.area].filter(Boolean).join(', '),
-    )}`;
-  if (!/^https:\/\//.test(url)) return '';
-  return `<p><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Open in Google Maps</a></p>`;
+    )}`
+  );
+}
+
+/**
+ * Los enlaces de fuera: mapa, Wikipedia y web oficial. Todos necesitan red; el
+ * artículo de Wikipedia se puede guardar en su app para leerlo sin conexión.
+ * La referencia a la guía en papel no es un enlace, sólo dónde buscar.
+ */
+function placeLinks(place: Place, lang: string): string {
+  const https = (u: string | null | undefined): u is string => !!u && /^https:\/\//.test(u);
+  const btn = (url: string, label: string) =>
+    `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
+  const maps = mapsUrl(place);
+  const wiki = pick(place.links?.wikipedia, lang);
+  const site = place.links?.official ?? place.contact?.url;
+  const buttons = [
+    https(maps) ? btn(maps, 'Open in Google Maps') : '',
+    https(wiki) ? btn(wiki, 'Read on Wikipedia') : '',
+    https(site) ? btn(site, 'Website') : '',
+  ].join('');
+  const guide = place.links?.guide ? `<p class="meta">Rough Guide: ${esc(place.links.guide)}</p>` : '';
+  return `${buttons ? `<p>${buttons}</p>` : ''}${guide}`;
 }
 
 /** Los datos de consulta rápida. Una fila sólo sale si hay algo que decir. */

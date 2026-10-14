@@ -58,4 +58,10 @@ describe('vista general', () => {
     assert.match(out, /Boat &lt;trip&gt;/);
     assert.match(out, /1 optional change</);
   });
+
+  test('las tareas propias encabezan la lista de pendientes', () => {
+    const out = renderOverview(trip.payload, { tasks: [{ text: 'Make <the> GPT', when: 'later' }] });
+    const todo = out.slice(out.indexOf('id="todo"'));
+    assert.match(todo, /<ul class="todo"><li><b>Make &lt;the&gt; GPT<\/b>/);
+  });
 });

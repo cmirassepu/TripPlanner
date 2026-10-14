@@ -279,7 +279,7 @@ function placeRow(plan: TripPayload, p: Place, usage: Map<string, Day[]>): strin
   if (wiki && /^https:\/\//.test(wiki)) links.push(`<a href="${esc(wiki)}" target="_blank" rel="noopener">Wikipedia</a>`);
 
   const flags: string[] = [];
-  if (!p.coords) flags.push('<span class="flag">No location yet</span>');
+  if (!p.coords && !mealSlots(plan).has(p.id)) flags.push('<span class="flag">No location yet</span>');
   if (unverified) flags.push(`<span class="flag soft">${unverified} to check</span>`);
 
   const deep = pick(p.deep, lang);
@@ -363,8 +363,26 @@ function todoBlock(plan: TripPayload, lang: string): string {
     items.push(`<li><b>${b.status === 'todo' ? 'Book' : 'Waiting on'}:</b> ${esc(pick(b.title, lang) ?? b.id)} (${esc(dayMonth(b.date))})</li>`);
   }
 
+  const transfersTodo = new Set(bookings.filter((b) => b.kind === 'transfer').map((b) => b.date));
+  // Lo que falta reservar y sólo está avisado en las notas de una parada.
+  const pending = plan.days.flatMap((d) =>
+    d.waypoints.flatMap((w) =>
+      (w.notes ?? [])
+        .filter((n) => n.type === 'warn' && /NOT BOOKED/.test(pick(n.text, lang) ?? ''))
+        // Los traslados ya salen arriba como reservas pendientes.
+        .filter((n) => !(/transfer/i.test(pick(n.text, lang) ?? '') && transfersTodo.has(d.date)))
+        .map((n) => ({ d, text: pick(n.text, lang)! })),
+    ),
+  );
+  if (pending.length) {
+    items.push(`<li><b>${pending.length} other things to book</b><ul class="sublist">${pending
+      .map(({ d, text }) => `<li><a href="#${esc(d.id)}">${esc(dayMonth(d.date))}</a> ${esc(text)}</li>`)
+      .join('')}</ul></li>`);
+  }
+
   const places = Object.values(plan.places);
-  const noCoords = places.filter((p) => !p.coords);
+  const slots = mealSlots(plan);
+  const noCoords = places.filter((p) => !p.coords && !slots.has(p.id));
   if (noCoords.length) {
     items.push(`<li><b>${noCoords.length} places without a location</b><span class="chips">${noCoords
       .map((p) => `<a class="tag" href="#p-${esc(p.id)}">${esc(p.name)}</a>`)
@@ -381,6 +399,16 @@ function todoBlock(plan: TripPayload, lang: string): string {
   if (empty.length) items.push(`<li><b>Areas with no places yet:</b> ${esc(empty.join(', '))}</li>`);
 
   return items.length ? `<ul class="todo">${items.join('')}</ul>` : '<p class="lede">Nothing left. Enjoy the trip.</p>';
+}
+
+/**
+ * Huecos genéricos («comer por aquí»): paradas con opciones para elegir. No
+ * son un sitio concreto, así que no les falta ubicación.
+ */
+function mealSlots(plan: TripPayload): Set<string> {
+  const ids = new Set<string>();
+  for (const d of plan.days) for (const w of d.waypoints) if (w.choices?.length) ids.add(w.place);
+  return ids;
 }
 
 /* ── fechas ──────────────────────────────────────────────────────────── */
@@ -525,7 +553,8 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .sub{display:block;font-size:.82rem;color:var(--muted)}
 .kind{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .todo{display:grid;gap:10px}
-.todo li{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.todo>li{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.sublist{margin:6px 0 0;padding-left:18px;display:grid;gap:2px;font-size:.9rem}
 @media (max-width:560px){
   .sum{grid-template-columns:1fr auto;gap:2px 10px}
   .what{grid-column:1/-1;grid-row:2}

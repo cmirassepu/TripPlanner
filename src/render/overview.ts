@@ -13,7 +13,7 @@
 
 import type { TripPayload, Day, Place, Stay, Booking } from '../model/types.ts';
 import { computeSchedule } from '../core/schedule.ts';
-import { formatClock } from '../core/time.ts';
+import { formatClock, formatDuration } from '../core/time.ts';
 import { pick, esc } from './day.ts';
 
 export interface OverviewOptions {
@@ -106,14 +106,14 @@ export function renderOverview(plan: TripPayload, opts: OverviewOptions = {}): s
 ${routeStrip(legs)}
 
 <section id="days">
-  <h2>Days</h2>
+  <h2>Days <span class="tools"><button type="button" data-all="open" data-in="days">Open all</button><button type="button" data-all="close" data-in="days">Close all</button></span></h2>
   ${legs.map((leg) => legBlock(plan, leg, lang, opts.ideas ?? [])).join('\n')}
 </section>
 
 ${ideasBlock(plan, opts.ideas ?? [])}
 
 <section id="places">
-  <h2>Places</h2>
+  <h2>Places <span class="tools"><button type="button" data-all="open" data-in="places">Open all</button><button type="button" data-all="close" data-in="places">Close all</button></span></h2>
   <p class="lede">Everything recorded for each area, planned or not. The day tag shows where a place is used.</p>
   ${placesByArea(plan, legs, usage)}
 </section>
@@ -127,8 +127,47 @@ ${ideasBlock(plan, opts.ideas ?? [])}
   <h2>To do</h2>
   ${todoBlock(plan, lang, opts.tasks ?? [])}
 </section>
-</div>`;
+</div>
+<button type="button" class="back" hidden>← Back</button>
+<script>${SCRIPT}</script>`;
 }
+
+/**
+ * Un enlace interno abre los desplegables que esconden su destino, y el botón
+ * «Back» devuelve a donde se estaba. Sin el script la página se lee igual,
+ * solo que hay que abrir a mano.
+ */
+const SCRIPT = `
+const back = document.querySelector('.back');
+const trail = [];
+function reveal(el) {
+  for (let d = el.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
+  if (el.tagName === 'LI' && el.firstElementChild?.tagName === 'DETAILS') el.firstElementChild.open = true;
+}
+document.addEventListener('click', (e) => {
+  const tools = e.target.closest('[data-all]');
+  if (tools) {
+    const open = tools.dataset.all === 'open';
+    document.getElementById(tools.dataset.in).querySelectorAll(':scope details:not(.stop):not(.choice):not(.idea):not(.place)')
+      .forEach((d) => { d.open = open; });
+    return;
+  }
+  const a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  const target = document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+  if (!target) return;
+  e.preventDefault();
+  trail.push(window.scrollY);
+  reveal(target);
+  target.scrollIntoView({ block: 'start' });
+  target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+  back.hidden = false;
+});
+back.addEventListener('click', () => {
+  window.scrollTo(0, trail.pop() ?? 0);
+  back.hidden = trail.length === 0;
+});
+`;
 
 /** Para abrir el HTML como archivo, fuera de un Artifact. */
 export function wrapPage(body: string): string {
@@ -186,8 +225,10 @@ function legBlock(plan: TripPayload, leg: Leg, lang: string, ideas: Idea[]): str
 
 function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): string {
   const status = dayStatus(day);
-  const open = ideas.filter((i) => i.date === day.date && (i.status ?? 'idea') === 'idea').length;
-  const ideaTag = open ? ` <a class="tag idea" href="#ideas">${open} optional change${open === 1 ? '' : 's'}</a>` : '';
+  const mine = ideas.filter((i) => i.date === day.date && (i.status ?? 'idea') === 'idea');
+  const ideaTag = mine.length
+    ? ` <span class="tag idea">${mine.length} optional change${mine.length === 1 ? '' : 's'}</span>`
+    : '';
   const summary = `<span class="when"><b>${esc(weekday(day.date))}</b> ${esc(dayMonth(day.date))}</span>
       <span class="what">${esc(pick(day.title, lang) ?? day.id)}${ideaTag}</span>
       <span class="pill ${status}">${STATUS_LABEL[status]}</span>`;
@@ -197,38 +238,59 @@ function dayRow(plan: TripPayload, day: Day, lang: string, ideas: Idea[]): strin
   }
 
   const intro = pick(day.intro, lang);
+  // Los cambios que se barajan para este día, plegados dentro del propio día.
+  const dayIdeas = mine.length
+    ? `<div class="day-ideas"><p class="lbl">Optional changes for this day</p>${mine.map((i) => ideaCard(plan, i, false)).join('')}</div>`
+    : '';
   if (status === 'outline') {
     return `<li id="${esc(day.id)}" class="day outline"><details><summary class="sum">${summary}</summary>
-    <div class="detail"><p class="intro">${esc(intro ?? '')}</p></div></details></li>`;
+    <div class="detail"><p class="intro">${esc(intro ?? '')}</p>${dayIdeas}</div></details></li>`;
   }
 
   const schedule = computeSchedule(day);
   const stops = schedule.stops
-    .map(({ waypoint: w, arrive }) => {
+    .map(({ waypoint: w, arrive, leave }, i) => {
       const place = plan.places[w.place];
       const anchor = w.anchor
         ? `<span class="anchor ${w.anchor.hard ? 'hard' : ''}">${esc(pick(w.anchor.label, lang) ?? w.anchor.type)} · ${esc(w.anchor.time)}</span>`
         : '';
-      const choices = (w.choices ?? [])
-        .map((id) => plan.places[id])
-        .filter(Boolean)
-        .map((p) => placeName(p!))
-        .join(', ');
-      return `<li><span class="t">${esc(formatClock(arrive))}</span><span class="s">${
-        place ? placeName(place) : esc(w.place)
-      }${anchor}${choices ? `<span class="choices">Pick from: ${choices}</span>` : ''}</span></li>`;
+      const choices = (w.choices ?? []).map((id) => plan.places[id]).filter((p): p is Place => !!p);
+      const key = w.priority === 'key' ? '<span class="key">Key</span>' : w.priority === 'optional' ? '<span class="opt">Optional</span>' : '';
+      const head = `<span class="t">${esc(formatClock(arrive))}</span><span class="s">${esc(
+        place?.name ?? w.place,
+      )}${key}${anchor}${choices.length ? `<span class="choices">Pick from: ${choices.map((p) => esc(p.name)).join(', ')}</span>` : ''}</span>`;
+
+      // Lo que hace falta para decidir si la parada está bien, sin salir del día.
+      const timing: string[] = [];
+      if (i > 0 && w.travelFrom) timing.push(`${formatDuration(w.travelFrom)} ${MODE_LABEL[w.travelMode ?? ''] ?? 'travel'} from the previous stop`);
+      if (w.duration) timing.push(`${formatDuration(w.duration)} here, until ${formatClock(leave)}`);
+      const notes = (w.notes ?? [])
+        .map((n) => `<li class="${n.type === 'warn' ? 'warn' : ''}">${esc(pick(n.text, lang) ?? '')}</li>`)
+        .join('');
+      const options = choices
+        .map((p) => `<details class="choice"><summary>${esc(p.name)}</summary>${placeBody(plan, p, lang)}</details>`)
+        .join('');
+      return `<li><details class="stop"><summary>${head}</summary><div class="stop-body">
+        ${timing.length ? `<p class="timing">${esc(timing.join(' · '))}</p>` : ''}
+        ${notes ? `<ul class="notes">${notes}</ul>` : ''}
+        ${place ? placeBody(plan, place, lang) : ''}
+        ${options ? `<div class="options"><p class="lbl">Options</p>${options}</div>` : ''}
+      </div></details></li>`;
     })
     .join('');
 
   return `<li id="${esc(day.id)}" class="day ${status}"><details><summary class="sum">${summary}</summary>
-    <div class="detail">${intro ? `<p class="intro">${esc(intro)}</p>` : ''}<ol class="stops">${stops}</ol></div>
+    <div class="detail">${intro ? `<p class="intro">${esc(intro)}</p>` : ''}${dayIdeas}<ol class="stops">${stops}</ol></div>
   </details></li>`;
 }
 
-/** El nombre lleva a la ficha del sitio en la sección de sitios. */
-function placeName(p: Place): string {
-  return `<a href="#p-${esc(p.id)}">${esc(p.name)}</a>`;
-}
+const MODE_LABEL: Record<string, string> = {
+  walking: 'walk',
+  driving: 'by car',
+  transit: 'by transit',
+  cycling: 'by bike',
+  flight: 'flight',
+};
 
 /* ── cambios opcionales ──────────────────────────────────────────────── */
 
@@ -237,25 +299,29 @@ const IDEA_STATUS: Record<string, string> = { idea: 'To decide', accepted: 'Acce
 function ideasBlock(plan: TripPayload, ideas: Idea[]): string {
   const order = (i: Idea) => (i.status === 'dropped' ? 2 : i.status === 'accepted' ? 1 : 0);
   const sorted = [...ideas].sort((a, b) => order(a) - order(b) || (a.date ?? '9').localeCompare(b.date ?? '9'));
-  const rows = sorted
-    .map((i) => {
-      const day = i.date ? plan.days.find((d) => d.date === i.date) : null;
-      const when = day
-        ? `<a href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
-        : 'Any day';
-      const st = i.status ?? 'idea';
-      const line = (label: string, v?: string | null) => (v ? `<p><span class="lbl">${label}</span> ${esc(v)}</p>` : '');
-      return `<li id="idea-${esc(i.id)}" class="idea ${st}">
-      <div class="ih"><span class="when">${when}</span><b>${esc(i.title)}</b><span class="pill ${st === 'idea' ? 'outline' : st === 'accepted' ? 'planned' : 'open'}">${IDEA_STATUS[st] ?? st}</span></div>
-      ${line('Instead of', i.replaces)}${line('Why', i.why)}${line('Cost', i.cost)}${line('From', i.source)}
-    </li>`;
-    })
-    .join('');
+  const rows = sorted.map((i) => `<li id="idea-${esc(i.id)}">${ideaCard(plan, i, true)}</li>`).join('');
   return `<section id="ideas">
   <h2>Optional changes</h2>
   <p class="lede">Ideas on the table, not in the plan yet. Each one says which day it would change and what it would replace.</p>
   ${rows ? `<ul class="ideas">${rows}</ul>` : '<p class="lede">None yet.</p>'}
 </section>`;
+}
+
+/** Plegada: el título y el día a la vista, el porqué y el coste al abrirla. */
+function ideaCard(plan: TripPayload, i: Idea, withDay: boolean): string {
+  const day = i.date ? plan.days.find((d) => d.date === i.date) : null;
+  const when = !withDay
+    ? ''
+    : day
+      ? `<a class="when" href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
+      : '<span class="when">Any day</span>';
+  const st = i.status ?? 'idea';
+  const line = (label: string, v?: string | null) => (v ? `<p><span class="lbl">${label}</span> ${esc(v)}</p>` : '');
+  return `<details class="idea ${st}"><summary class="ih">${when}<b>${esc(i.title)}</b><span class="pill ${
+    st === 'idea' ? 'outline' : st === 'accepted' ? 'planned' : 'open'
+  }">${IDEA_STATUS[st] ?? st}</span></summary>
+      <div class="idea-body">${line('Instead of', i.replaces)}${line('Why', i.why)}${line('Cost', i.cost)}${line('From', i.source)}</div>
+    </details>`;
 }
 
 /* ── sitios ──────────────────────────────────────────────────────────── */
@@ -308,8 +374,8 @@ function placesByArea(plan: TripPayload, legs: Leg[], usage: Map<string, Day[]>)
     const sorted = [...places].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
     const sights = places.filter((p) => p.category !== 'lodging' && p.category !== 'transport').length;
     const count = sights ? `${sights} place${sights === 1 ? '' : 's'} to see or eat` : 'nothing recorded yet';
-    return `<div class="area"><h3>${esc(name)} <span class="count">${count}</span></h3>${note}
-      ${sorted.length ? `<ul class="places">${sorted.map((p) => placeRow(plan, p, usage)).join('')}</ul>` : ''}</div>`;
+    return `<details class="area"><summary><h3>${esc(name)} <span class="count">${count}</span></h3></summary>${note}
+      ${sorted.length ? `<ul class="places">${sorted.map((p) => placeRow(plan, p, usage)).join('')}</ul>` : ''}</details>`;
   };
 
   return [
@@ -326,6 +392,14 @@ function placeRow(plan: TripPayload, p: Place, usage: Map<string, Day[]>): strin
   const days = (usage.get(p.id) ?? [])
     .map((d) => `<a class="tag day" href="#${esc(d.id)}">${esc(dayMonth(d.date))}</a>`)
     .join('');
+  return `<li id="p-${esc(p.id)}"><details class="place">
+    <summary class="ph"><span class="cat">${esc(CATEGORY_LABEL[p.category ?? ''] ?? p.category ?? '')}</span><b>${esc(p.name)}</b>${days}</summary>
+    ${placeBody(plan, p, lang)}
+  </details></li>`;
+}
+
+/** Lo que se sabe de un sitio: descripción, enlaces, guía y lo que falta. Sale igual en el día y en la zona. */
+function placeBody(plan: TripPayload, p: Place, lang: string): string {
   const unverified = (p.facts ?? []).filter((f) => f.confidence === 'unverified').length;
 
   const links: string[] = [];
@@ -341,13 +415,16 @@ function placeRow(plan: TripPayload, p: Place, usage: Map<string, Day[]>): strin
   if (unverified) flags.push(`<span class="flag soft">${unverified} to check</span>`);
 
   const deep = pick(p.deep, lang);
-  return `<li id="p-${esc(p.id)}" class="place">
-    <div class="ph"><span class="cat">${esc(CATEGORY_LABEL[p.category ?? ''] ?? p.category ?? '')}</span><b>${esc(p.name)}</b>${days}</div>
+  const facts = (p.facts ?? [])
+    .map((f) => `<li class="${f.confidence === 'unverified' ? 'unv' : ''}">${esc(pick(f.text, lang) ?? '')}</li>`)
+    .join('');
+  return `<div class="pbody">
     ${deep ? `<p class="deep">${esc(deep)}</p>` : ''}
+    ${facts ? `<ul class="facts">${facts}</ul>` : ''}
     <p class="links">${links.join('')}${
       p.links?.guide ? `<span class="guide">Rough Guide: ${esc(p.links.guide)}</span>` : ''
     }${flags.join('')}</p>
-  </li>`;
+  </div>`;
 }
 
 /** Igual que el botón de la app: por nombre y zona, para abrir la ficha y no un punto. */
@@ -358,6 +435,11 @@ function mapsUrl(p: Place): string | null {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     [name, p.area].filter(Boolean).join(', '),
   )}`;
+}
+
+/** Enlace a la ficha del sitio; el script la abre y deja volver con «Back». */
+function placeName(p: Place): string {
+  return `<a href="#p-${esc(p.id)}">${esc(p.name)}</a>`;
 }
 
 /* ── reservas ────────────────────────────────────────────────────────── */
@@ -582,7 +664,6 @@ details[open]>.sum .what::before{transform:rotate(90deg)}
 .pill.open{color:var(--muted)}
 .detail{padding:0 12px 12px calc(6.5rem + 24px)}
 .intro{margin:0 0 8px;color:var(--muted);max-width:60ch}
-.stops li{display:grid;grid-template-columns:3.2rem 1fr;gap:8px;padding:3px 0}
 .t{font-family:var(--mono);font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .s{min-width:0}
 .anchor{display:block;font-size:.82rem;color:var(--muted)}
@@ -592,7 +673,7 @@ details[open]>.sum .what::before{transform:rotate(90deg)}
 .area h3{margin-bottom:8px}
 .count{font-weight:400;font-size:.85rem;color:var(--muted);margin-left:6px}
 .places{display:grid;gap:8px}
-.place{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:4px}
+.place{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .place:target,.day:target{outline:2px solid var(--accent);outline-offset:2px}
 .ph{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .cat{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:4.5rem}
@@ -614,7 +695,7 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .kind{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .todo{display:grid;gap:10px}
 .ideas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-.idea{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:2px}
+.idea{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .idea.dropped{opacity:.55}
 .idea:target{outline:2px solid var(--accent);outline-offset:2px}
 .ih{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
@@ -624,7 +705,46 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .tag.idea{margin-left:8px;color:var(--outline-ink);border-color:var(--outline)}
 .todo>li{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 .sublist{margin:6px 0 0;padding-left:18px;display:grid;gap:2px;font-size:.9rem}
+summary{cursor:pointer}
+.stop>summary,.choice>summary,.area>summary,.place>summary,.idea>summary{list-style:none}
+.stop>summary::-webkit-details-marker,.choice>summary::-webkit-details-marker,.area>summary::-webkit-details-marker,.place>summary::-webkit-details-marker,.idea>summary::-webkit-details-marker{display:none}
+.stop>summary{display:grid;grid-template-columns:4.2rem 1fr;gap:8px;padding:3px 0;border-radius:4px}
+.stop>summary:hover,.place>summary:hover,.idea>summary:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.stop>summary .t::before,.choice>summary::before{content:"▸ ";color:var(--muted)}
+.stop[open]>summary .t::before,.choice[open]>summary::before{content:"▾ "}
+.stop[open]>summary .s{font-weight:600}
+.stops>li{padding:0}
+.stop-body{margin:2px 0 10px 4.7rem;padding:8px 12px;border-left:3px solid var(--line);display:grid;gap:6px}
+.timing{margin:0;font-size:.85rem;color:var(--muted)}
+.notes,.facts{margin:0;padding-left:18px;font-size:.88rem;display:grid;gap:2px}
+.notes .warn{color:var(--warn);font-weight:600}
+.facts{color:var(--muted)}
+.facts .unv{font-style:italic}
+.pbody{display:grid;gap:6px}
+.key,.opt{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-left:8px;padding:0 6px;border-radius:99px;border:1px solid currentColor;vertical-align:1px}
+.key{color:var(--planned)}
+.opt{color:var(--muted)}
+.options{display:grid;gap:4px}
+.choice{border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.choice[open]{padding-bottom:10px}
+.choice>summary{font-weight:600;font-size:.9rem}
+.day-ideas{display:grid;gap:6px;margin:0 0 12px}
+.day-ideas .lbl{margin:0}
+.area>summary{padding:4px 0;margin-bottom:8px}
+.area>summary h3::before,.idea>summary b::before{content:"▸ ";color:var(--muted)}
+.area[open]>summary h3::before,.idea[open]>summary b::before{content:"▾ "}
+.area{margin-bottom:16px}
+.place>summary{border-radius:4px}
+.place[open]>summary{margin-bottom:6px}
+.idea-body{display:grid;gap:2px;margin-top:6px}
+.tools{float:right;display:flex;gap:6px}
+.tools button,.back{font:600 .78rem var(--sans);color:var(--accent);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px 10px;cursor:pointer}
+.back{position:fixed;right:16px;bottom:16px;padding:8px 16px;font-size:.9rem;box-shadow:0 2px 8px rgb(0 0 0 / .2);border-color:var(--accent)}
+.back[hidden]{display:none}
+.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%,40%{outline:2px solid var(--accent);outline-offset:2px}100%{outline:2px solid transparent;outline-offset:2px}}
 @media (max-width:560px){
+  .stop-body{margin-left:0}
   .sum{grid-template-columns:1fr auto;gap:2px 10px}
   .what{grid-column:1/-1;grid-row:2}
   .detail{padding:0 12px 12px}

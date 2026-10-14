@@ -28,8 +28,15 @@ describe('vista general', () => {
     for (const id of Object.keys(trip.payload.places)) assert.match(html, new RegExp(`id="p-${id}"`));
   });
 
-  test('sin scripts ni recursos externos', () => {
-    assert.doesNotMatch(html, /<script|<link|@import/);
+  test('sin recursos externos; el único script va dentro de la página', () => {
+    assert.doesNotMatch(html, /<link|@import|<script[^>]+src=/);
+  });
+
+  test('cada parada se despliega con la ficha de su sitio dentro del día', () => {
+    const d = trip.payload.days.find((x) => x.waypoints.length)!;
+    const p = trip.payload.places[d.waypoints[0].place];
+    const day = html.slice(html.indexOf(`id="${d.id}"`));
+    assert.match(day.slice(0, day.indexOf('</ol>')), new RegExp(`<details class="stop"><summary>[^]*${p.name.replace(/[()]/g, '.')}`));
   });
 
   test('un día sin paradas está abierto, o en esbozo si tiene la idea escrita', () => {

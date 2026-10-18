@@ -173,6 +173,7 @@ function validatePlaces(plan: TripPayload, issues: Issue[]): void {
       checkLocalized(plan, fact.text, `${path}.text`, issues);
     });
     checkLocalized(plan, place.deep, `places.${id}.deep`, issues);
+    checkLocalized(plan, place.story, `places.${id}.story`, issues);
   }
 }
 

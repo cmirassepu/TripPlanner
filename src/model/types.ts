@@ -78,6 +78,13 @@ export interface Place {
   facts?: Fact[];
   deep?: Localized | null;
   /**
+   * Texto largo para leer con calma: qué es, su historia, por qué merece la
+   * pena, curiosidades. Párrafos separados por una línea en blanco; una línea
+   * que empieza por `## ` es un título y una que empieza por `- ` es un punto
+   * de una lista. Nada más: no es Markdown completo.
+   */
+  story?: Localized | null;
+  /**
    * Una foto del sitio. `src` es un `data:` URI: va dentro del archivo de
    * viaje para que funcione sin red. `credit` es obligatorio en la práctica
    * (autor y licencia), porque las fotos libres lo exigen.

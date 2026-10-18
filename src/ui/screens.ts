@@ -12,6 +12,7 @@ import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
 import { haversine, formatDistance } from '../core/geo.ts';
 import { esc, pick, longDate } from '../render/day.ts';
+import { storyHtml, readingMinutes } from '../render/story.ts';
 import { summarise, sortForLibrary } from '../library/library.ts';
 import { formatBytes, installHint } from '../store/install.ts';
 import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
@@ -558,6 +559,7 @@ function placeDetail(
     .join('');
 
   const about = pick(place.deep, lang);
+  const story = pick(place.story, lang);
 
   const fineprint = [
     ...extra.notes.filter((n) => n.type !== 'warn').map((n) => `<li>${esc(pick(n.text, lang) ?? '')}</li>`),
@@ -582,6 +584,11 @@ function placeDetail(
     ${extra.after}
     ${placeFacts(place, day, lang)}
     ${placeLinks(place, lang)}
+    ${
+      story
+        ? `<article class="story"><p class="meta">${readingMinutes(story)} min read</p>${storyHtml(story)}</article>`
+        : ''
+    }
     ${
       fineprint.length
         ? `<details class="panel"><summary>Good to know · ${fineprint.length}</summary><ul>${fineprint.join('')}</ul></details>`

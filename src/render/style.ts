@@ -129,6 +129,11 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .acts button{padding:.35rem .8rem;border:1px solid var(--line);border-radius:2rem;font-size:.8rem;background:var(--bg)}
 .acts button[aria-pressed=true]{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 
+.story{margin:1.4rem 0 .6rem;padding-top:.6rem;border-top:1px solid var(--line)}
+.story h3{margin:1.1rem 0 .3rem;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.story p{margin:.5rem 0;font-size:1rem;line-height:1.55}
+.story ul{margin:.4rem 0;padding-left:1.1rem;font-size:.95rem;line-height:1.5}
+.story li{margin:.25rem 0}
 .panel{background:var(--card);border-radius:.7rem;padding:1rem;margin:.8rem 0}
 .panel h3{margin:0 0 .5rem}
 .panel p{margin:.35rem 0;font-size:.9rem}

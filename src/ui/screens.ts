@@ -23,6 +23,10 @@ import { formatBytes, installHint } from '../store/install.ts';
 import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
 import { ICONS, categoryIcon, legIcon } from './icons.ts';
 
+/** Lo pone el paso de construcción (commit y fecha); en los tests no existe. */
+declare const __APP_VERSION__: string | undefined;
+const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
+
 /* ── Cromo ───────────────────────────────────────────────────────────── */
 
 export function installBanner(state: AppState): string {
@@ -1122,5 +1126,7 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
   <div class="panel">
     <h3>Data</h3>
     <button class="btn ghost" data-act="seed">Reload the sample trip</button>
-  </div>`;
+  </div>
+
+  <p class="meta">App version ${esc(APP_VERSION)}</p>`;
 }

@@ -10,6 +10,7 @@
 import { build } from 'esbuild';
 import { writeFileSync, readFileSync, mkdirSync, copyFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { FULL_STYLE } from '../src/render/style.ts';
@@ -37,8 +38,19 @@ for (const name of [
 
 const icons = writeIcons(web);
 
+// La versión que enseña Ajustes: el commit y la fecha, para saber en el
+// teléfono qué versión tiene instalada.
+let commit = 'dev';
+try {
+  commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+} catch {
+  /* sin git (p. ej. una copia suelta) se queda en «dev» */
+}
+const built = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16).replace('T', ' ');
+
 const result = await build({
   entryPoints: [fileURLToPath(new URL('src/ui/app.ts', root))],
+  define: { __APP_VERSION__: JSON.stringify(`${commit} · ${built}`) },
   outfile: `${web}app.js`,
   bundle: true,
   format: 'esm',

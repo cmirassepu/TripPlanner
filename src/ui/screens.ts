@@ -944,7 +944,9 @@ function placeDetail(
     const sections = storySections(story).map((s, i) => s + (rest[i] ? figure(rest[i]) : ''));
     // Si hay más fotos que secciones, las que quedan van al final.
     const tail = rest.slice(sections.length).map(figure).join('');
-    article = `<article class="story"><p class="meta">${readingMinutes(story)} min read</p>${sections.join('')}${tail}</article>`;
+    // Los minutos de lectura sólo tienen sentido en una lectura larga.
+    const minutes = story.split(/\s+/).length >= 150 ? `<p class="meta">${readingMinutes(story)} min read</p>` : '';
+    article = `<article class="story">${minutes}${sections.join('')}${tail}</article>`;
   } else if (photos.length > 1) {
     article = `<article class="story">${photos.slice(1).map(figure).join('')}</article>`;
   }
@@ -988,7 +990,7 @@ function placeDetail(
  */
 function mapsUrl(place: Place): string | null {
   // Un hueco genérico («comer por aquí») no es un sitio que buscar.
-  if (!place.links?.maps && !place.coords && !place.address && !place.area) return null;
+  if (!place.links?.maps && !place.coords && !place.address) return null;
   const name = place.name.replace(/\s*\(.*?\)\s*/g, ' ').trim();
   return (
     place.links?.maps ??

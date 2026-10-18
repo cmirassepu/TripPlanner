@@ -173,6 +173,8 @@ const scrollByHash = new Map<string, number>();
 async function navigate(): Promise<void> {
   const changed = location.hash !== shownHash;
   if (changed && shownHash !== null) scrollByHash.set(shownHash, window.scrollY);
+  // El aviso («Loaded…») es de la pantalla en la que salió: no viaja a la siguiente.
+  if (changed && shownHash !== null) state.flash = null;
   shownHash = location.hash;
   state.route = parseRoute(location.hash);
   if (changed) state.mapOpen = false;

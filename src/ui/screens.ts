@@ -80,6 +80,9 @@ const photosOf = (place: Place | undefined): Photo[] =>
 
 const firstPhoto = (place: Place | undefined): Photo | undefined => photosOf(place)[0];
 
+/** La versión pequeña para miniaturas; si el archivo no la trae, la grande. */
+const small = (p: Photo): string => (p.thumb?.startsWith('data:image/') ? p.thumb : p.src);
+
 /** La portada del viaje: la que diga el archivo, o la del primer sitio que ver con foto (ni hotel, ni transporte, ni comida). */
 function coverOf(plan: TripPayload): Photo | undefined {
   if (isPhoto(plan.cover)) return plan.cover;
@@ -167,7 +170,7 @@ function tripMap(plan: TripPayload, tripId: string): string {
         <circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r + 5}" fill="#fff"/>
         ${
           photo
-            ? `<image href="${esc(photo.src)}" x="${(x - r).toFixed(0)}" y="${(y - r).toFixed(0)}" width="${2 * r}" height="${2 * r}" clip-path="url(#${id})" preserveAspectRatio="xMidYMid slice"/>`
+            ? `<image href="${esc(small(photo))}" x="${(x - r).toFixed(0)}" y="${(y - r).toFixed(0)}" width="${2 * r}" height="${2 * r}" clip-path="url(#${id})" preserveAspectRatio="xMidYMid slice"/>`
             : `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r}" fill="${esc(color)}"/>`
         }
         <circle cx="${(x - r * 0.75).toFixed(0)}" cy="${(y + r * 0.75).toFixed(0)}" r="20" fill="${esc(color)}" stroke="#fff" stroke-width="4"/>
@@ -296,7 +299,7 @@ export function libraryScreen(state: AppState): string {
             ? `Starts in ${daysBetween(todayIso, plan.startDate)} days`
             : 'Finished';
       return `<li><button class="trip" data-go="${esc(routeHash({ name: 'trip', tripId: stored.tripId }))}">
-        <span class="pic">${cover ? `<img src="${esc(cover.src)}" alt="">` : ''}</span>
+        <span class="pic">${cover ? `<img src="${esc(small(cover))}" alt="">` : ''}</span>
         <span><h3>${esc(s.title)}</h3>
           <p class="meta">${esc(niceDate(plan.startDate))} → ${esc(niceDate(plan.endDate))} · ${s.days} days</p>
           <p class="tag">${esc(tag)}</p></span>
@@ -364,7 +367,7 @@ export function tripScreen(state: AppState): string {
         .join('');
       return `<details ${open ? 'open' : ''} ${areaStyle(color)}>
         <summary class="stay">
-          <span class="pic">${photo ? `<img src="${esc(photo.src)}" alt="">` : ''}<span class="n">${i + 1}</span></span>
+          <span class="pic">${photo ? `<img src="${esc(small(photo))}" alt="">` : ''}<span class="n">${i + 1}</span></span>
           <span><h3>${esc(st.area ?? st.name)}</h3>
             <p class="meta">${days.length} night${days.length === 1 ? '' : 's'} · ${esc(niceDate(st.from))} → ${esc(niceDate(st.to))}</p>
             <p class="meta">${esc(st.name)}</p></span>
@@ -511,7 +514,7 @@ function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: n
     : routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id });
 
   const photo = isSight ? firstPhoto(place) : undefined;
-  const icon = photo ? `<img src="${esc(photo.src)}" alt="" loading="lazy">` : categoryIcon(place?.category);
+  const icon = photo ? `<img src="${esc(small(photo))}" alt="" loading="lazy">` : categoryIcon(place?.category);
 
   const dead = w.anchor ? withTime(pick(w.anchor.label, lang) ?? w.anchor.type, w.anchor.time) : '';
   const closed = closedOnArrival(place, day, stop) ? 'Closed when you arrive' : '';
@@ -523,7 +526,7 @@ function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: n
       const ph = firstPhoto(pl);
       return `<a class="chip ${ph ? '' : 'plain'}" href="${esc(
         routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }),
-      )}">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : ''}${esc(pl.name)}</a>`;
+      )}">${ph ? `<img src="${esc(small(ph))}" alt="" loading="lazy">` : ''}${esc(pl.name)}</a>`;
     })
     .join('');
 
@@ -627,7 +630,7 @@ const NEARBY_FILTERS: ReadonlyArray<readonly [NearbyFilter, string]> = [
 function spot(plan: TripPayload, tripId: string, day: Day, pl: Place, line: string): string {
   const ph = firstPhoto(pl);
   return `<li><a class="spot" href="${esc(routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }))}">
-    <span class="pic">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
+    <span class="pic">${ph ? `<img src="${esc(small(ph))}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
     <span><p class="eyebrow">${esc(label(pl.category))}</p><span class="name">${esc(pl.name)}</span>${
       line ? `<p class="line">${esc(line)}</p>` : ''
     }</span></a></li>`;
@@ -666,7 +669,7 @@ function placesBody(state: AppState, plan: TripPayload, tripId: string, day: Day
     seen.add(pl.id);
     const ph = firstPhoto(pl);
     sights.push(`<li><a class="card" href="${esc(routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id }))}">
-      <span class="pic">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
+      <span class="pic">${ph ? `<img src="${esc(small(ph))}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
       <p class="eyebrow">${esc(label(pl.category))}</p><h3>${esc(pl.name)}</h3>
       <p class="line">${esc(pick(pl.deep, lang) ?? '')}</p></a></li>`);
   }

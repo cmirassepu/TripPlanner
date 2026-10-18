@@ -61,6 +61,12 @@ export interface DogPolicy {
  */
 export interface Photo {
   src: string;
+  /**
+   * Versión pequeña (unos 240 px de ancho) para listas, miniaturas y mapas.
+   * Sin ella el teléfono descodifica la foto grande entera por cada
+   * miniatura, y con treinta en pantalla se queda sin memoria.
+   */
+  thumb?: string | null;
   credit?: string | null;
   caption?: Localized | null;
 }

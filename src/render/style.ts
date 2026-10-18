@@ -161,8 +161,7 @@ details[open]>.stay .open{transform:rotate(90deg)}
 /* mapa del día */
 .daymap{margin:0 0 1.25rem}
 .daymap .frame{position:relative;border-radius:1rem;overflow:hidden;border:1px solid var(--line);background:#F4EFE6}
-.daymap .frame img{width:100%;height:auto;display:block}
-.daymap .frame svg{position:absolute;inset:0;width:100%;height:100%}
+.daymap .frame img,.daymap .frame svg,.mapfull .frame svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .daymap figcaption{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
 .pin circle{fill:var(--a);stroke:#fff;stroke-width:3}
 .pin text{fill:#fff;font-weight:700;text-anchor:middle;dominant-baseline:central;font-family:var(--ui)}
@@ -171,8 +170,7 @@ details[open]>.stay .open{transform:rotate(90deg)}
 .mapfull{position:fixed;inset:0;z-index:20;background:#F4EFE6;display:flex;flex-direction:column}
 .mapfull .scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 .mapfull .frame{position:relative;width:260vw}
-.mapfull .frame img{width:100%;display:block}
-.mapfull .frame svg{position:absolute;inset:0;width:100%;height:100%}
+.mapfull .frame img{position:absolute;inset:0;width:100%;height:100%;display:block}
 .mapfull .barf{display:flex;gap:.5rem;justify-content:space-between;align-items:center;padding:calc(.5rem + var(--safe-top)) 1rem .5rem;background:var(--bg);border-bottom:1px solid var(--line)}
 .mapfull .foot{padding:.5rem 1rem calc(.6rem + var(--safe-bottom));background:var(--bg);border-top:1px solid var(--line);display:flex;gap:.5rem}
 

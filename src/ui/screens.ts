@@ -233,6 +233,50 @@ function dayDirectionsUrl(points: { c: Coords }[]): string | null {
   )}${middle.length ? `&waypoints=${encodeURIComponent(middle.map((p) => ll(p.c)).join('|'))}` : ''}&travelmode=walking`;
 }
 
+/**
+ * El SVG del mapa va en línea en la página, no como `<img>`: como imagen, el
+ * teléfono lo rasteriza entero a la resolución de la pantalla y vuelve a
+ * hacerlo con cada zoom, y con dos o tres metros de mapa se queda sin memoria.
+ * En línea son unas pocas decenas de trazos que WebKit dibuja sin despeinarse.
+ *
+ * Antes de ponerlo se limpia: el archivo de viaje no puede meter scripts ni
+ * cargar nada de la red.
+ */
+const svgCache = new Map<string, string>();
+function inlineSvg(src: string): string | null {
+  if (!src.startsWith('data:image/svg+xml;base64,') || typeof DOMParser === 'undefined') return null;
+  const hit = svgCache.get(src);
+  if (hit) return hit;
+  let text: string;
+  try {
+    text = decodeURIComponent(escape(atob(src.slice(src.indexOf(',') + 1))));
+  } catch {
+    return null;
+  }
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (root.nodeName !== 'svg') return null;
+  for (const el of Array.from(root.querySelectorAll('*'))) {
+    if (/^(script|foreignObject|iframe|use|image|animate|set)$/i.test(el.nodeName)) {
+      el.remove();
+      continue;
+    }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim();
+      if (name.startsWith('on') || ((name === 'href' || name === 'xlink:href') && !value.startsWith('#'))) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
+  root.removeAttribute('width');
+  root.removeAttribute('height');
+  const out = new XMLSerializer().serializeToString(root);
+  svgCache.clear();
+  svgCache.set(src, out);
+  return out;
+}
+
 /** El mapa a pie del día, pequeño, con sus botones; y a pantalla completa cuando se pide. */
 function dayMapFigure(state: AppState, plan: TripPayload, day: Day): string {
   const m = day.map;
@@ -244,7 +288,8 @@ function dayMapFigure(state: AppState, plan: TripPayload, day: Day): string {
   if (!m?.src.startsWith('data:image/svg+xml')) return gmaps ? `<div class="btns">${gmaps}</div>` : '';
 
   const here = state.position;
-  const frame = `<div class="frame"><img src="${esc(m.src)}" alt="Map of today's walk">${mapOverlay(m, points, here)}</div>`;
+  const drawing = inlineSvg(m.src) ?? `<img src="${esc(m.src)}" alt="Map of today's walk">`;
+  const frame = `<div class="frame" style="aspect-ratio:${m.width}/${m.height}">${drawing}${mapOverlay(m, points, here)}</div>`;
   const locate = `<button class="btn ghost" data-act="locate">${ICONS.pin} Where am I</button>`;
   const full = state.mapOpen
     ? `<div class="mapfull"><div class="barf"><strong>${esc(pick(day.title, plan.primaryLanguage) ?? '')}</strong><button class="chip" data-act="map-close">Close</button></div>

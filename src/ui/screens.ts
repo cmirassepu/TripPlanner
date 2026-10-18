@@ -338,7 +338,7 @@ export function tripScreen(state: AppState): string {
       <a class="back" href="#/">${ICONS.back} Trips</a>
       <div class="text"><p class="eyebrow">${esc(niceDate(plan.startDate))} – ${esc(niceDate(plan.endDate))}</p>
         <h1>${esc(pick(plan.title, lang) ?? tripId)}</h1>
-        <p class="meta">${daysBetween(plan.startDate, plan.endDate)} nights · ${plan.stays.length} stays</p></div></div>
+        <p class="meta">${plan.days.length} days · ${plan.stays.length} stays</p></div></div>
     ${todayCard}
     <div class="section"><h2>Where we stay</h2><a class="chip" href="${esc(routeHash({ name: 'bookings', tripId }))}">All bookings</a></div>
     <div class="stays">${stays}</div>`;
@@ -1023,8 +1023,11 @@ function placeFacts(place: Place, day: Day, lang: string): string {
 
   const windows = windowsFor(place.hours, day.date);
   const allDay = windows?.length === 1 && windows[0][0] === '00:00' && windows[0][1] >= '23:59';
-  if (!windows) rows.push(`<dt>Open today</dt><dd>unknown</dd>`);
-  else if (!allDay) {
+  // Una playa, una excursión reservada o un pueblo no «abren»: sin horario no se dice nada.
+  const hasHours = ['temple', 'museum', 'market', 'park', 'food', 'viewpoint'].includes(place.category ?? '');
+  if (!windows) {
+    if (hasHours) rows.push(`<dt>Open today</dt><dd>unknown</dd>`);
+  } else if (!allDay) {
     rows.push(`<dt>Open today</dt><dd>${esc(windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed')}</dd>`);
   }
 

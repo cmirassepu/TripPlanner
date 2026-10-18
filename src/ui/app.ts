@@ -162,8 +162,17 @@ async function seed(): Promise<void> {
 
 let shownHash: string | null = null;
 
+/**
+ * El scroll de cada pantalla, por su hash, guardado al salir de ella. Al
+ * volver atrás se recupera, para que «atrás» deje la pantalla exactamente
+ * como estaba. Un enlace hacia delante borra el valor guardado de su destino:
+ * una pantalla nueva empieza arriba.
+ */
+const scrollByHash = new Map<string, number>();
+
 async function navigate(): Promise<void> {
   const changed = location.hash !== shownHash;
+  if (changed && shownHash !== null) scrollByHash.set(shownHash, window.scrollY);
   shownHash = location.hash;
   state.route = parseRoute(location.hash);
   if (changed) state.mapOpen = false;
@@ -183,8 +192,13 @@ async function navigate(): Promise<void> {
 
   render();
   // `render` conserva el scroll para los repintados. Al cambiar de pantalla
-  // se empieza arriba: abrir una parada a media página la dejaría cortada.
-  if (changed) window.scrollTo({ top: 0 });
+  // se vuelve a donde se estaba si es una vuelta atrás, y si no, arriba.
+  if (changed) window.scrollTo({ top: scrollByHash.get(location.hash) ?? 0 });
+}
+
+/** Un enlace hacia delante: su destino empieza arriba aunque se haya visitado antes. */
+function forward(hash: string): void {
+  scrollByHash.delete(hash);
 }
 
 function render(): void {
@@ -215,6 +229,14 @@ function render(): void {
 /* ── Eventos ─────────────────────────────────────────────────────────── */
 
 function onClick(event: Event): void {
+  // Los enlaces normales de la app (href="#/...") navegan solos; sólo se
+  // anota que van hacia delante.
+  const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#/"]');
+  if (link && !link.dataset.go && !link.dataset.swap) {
+    forward(link.getAttribute('href')!);
+    state.flash = null;
+    return;
+  }
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act],[data-go],[data-swap]');
   if (!target) return;
   // Los campos se atienden en `change`. Cancelar su clic impediría que se
@@ -232,6 +254,7 @@ function onClick(event: Event): void {
   if (go) {
     event.preventDefault();
     state.flash = null;
+    forward(go);
     location.hash = go;
     return;
   }
@@ -273,6 +296,7 @@ function onTouchEnd(event: TouchEvent): void {
 
 function swap(hash: string): void {
   state.flash = null;
+  forward(hash);
   location.replace(hash);
 }
 
@@ -309,7 +333,8 @@ async function loadFile(picked: File): Promise<void> {
   const result = validateFile(file, { appliedVersion: stored?.version });
 
   if (!result.applicable) {
-    state.flash = `${picked.name}: not loaded. ${[...result.blockers, result.report].filter(Boolean).join(' ')}`;
+    // Sólo los motivos: el informe completo de avisos no cabe en un teléfono.
+    state.flash = `${picked.name}: not loaded. ${result.blockers.join(' ')}`;
     render();
     return;
   }

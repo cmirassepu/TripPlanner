@@ -23,6 +23,8 @@ import { formatBytes, installHint } from '../store/install.ts';
 import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
 import { ICONS, categoryIcon, legIcon } from './icons.ts';
 
+const MAPS_ON = false;
+
 /** Lo pone el paso de construcción (commit y fecha); en los tests no existe. */
 declare const __APP_VERSION__: string | undefined;
 const APP_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
@@ -185,7 +187,9 @@ function mapOverlay(m: MapBounds, points: { n: number; c: Coords }[], here: Coor
  */
 function dayMapFigure(state: AppState, plan: TripPayload, day: Day): string {
   const m = day.map;
-  if (!m?.src.startsWith('data:image/')) return '';
+  // Apagado de momento: en el iPhone la app se cierra al mover el mapa, incluso
+  // como imagen fija. Pendiente de encontrar la causa en el propio teléfono.
+  if (!MAPS_ON || !m?.src.startsWith('data:image/')) return '';
   const points = dayPoints(plan, day);
   const here = state.position;
   const frame = `<div class="frame" style="aspect-ratio:${m.width}/${m.height}"><img src="${esc(m.src)}" alt="Map of today's walk">${mapOverlay(m, points, here)}</div>`;

@@ -7,20 +7,35 @@
 import { esc } from './day.ts';
 
 export function storyHtml(text: string): string {
-  return text
-    .trim()
-    .split(/\n\s*\n/)
-    .map((block) => {
-      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-      if (lines.length === 1 && lines[0].startsWith('## ')) return `<h3>${esc(lines[0].slice(3))}</h3>`;
-      if (lines.every((l) => l.startsWith('- '))) {
-        return `<ul>${lines.map((l) => `<li>${esc(l.slice(2))}</li>`).join('')}</ul>`;
-      }
-      // Un título pegado a su párrafo, sin línea en blanco entre medias.
-      const head = lines[0].startsWith('## ') ? `<h3>${esc(lines.shift()!.slice(3))}</h3>` : '';
-      return `${head}<p>${esc(lines.join(' '))}</p>`;
-    })
-    .join('');
+  return storySections(text).join('');
+}
+
+/**
+ * El texto por secciones: cada `## título` abre una. Lo que va antes del
+ * primer título es una sección sin él. Así la página del sitio puede meter una
+ * foto entre sección y sección.
+ */
+export function storySections(text: string): string[] {
+  const sections: string[] = [];
+  let current = '';
+  for (const block of text.trim().split(/\n\s*\n/)) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) continue;
+    let html = '';
+    if (lines[0].startsWith('## ')) {
+      if (current) sections.push(current);
+      current = '';
+      html += `<h3>${esc(lines.shift()!.slice(3))}</h3>`;
+    }
+    if (lines.length && lines.every((l) => l.startsWith('- '))) {
+      html += `<ul>${lines.map((l) => `<li>${esc(l.slice(2))}</li>`).join('')}</ul>`;
+    } else if (lines.length) {
+      html += `<p>${esc(lines.join(' '))}</p>`;
+    }
+    current += html;
+  }
+  if (current) sections.push(current);
+  return sections;
 }
 
 /** Minutos de lectura, a unas 200 palabras por minuto. Nunca menos de uno. */

@@ -30,6 +30,7 @@ const SHELL = [
   './icon-180.png',
   './icon-192.png',
   './icon-512.png',
+  './fonts/bricolage-latin.woff2',
   './data/sevilla-test.trip.json',
 ];
 

@@ -26,6 +26,7 @@ import {
   stopScreen,
   placeScreen,
   bookingsScreen,
+  hotelScreen,
   settingsScreen,
   type SpikeView,
 } from './screens.ts';
@@ -56,7 +57,7 @@ async function boot(): Promise<void> {
     clock: loadClock(),
     textSize: Number(localStorage.getItem(TEXT_SIZE_KEY)) || 100,
     nearby: 'all',
-    nearbySort: 'az',
+    nearbySort: 'hotel',
     position: null,
     flash: null,
     updateReady: false,
@@ -199,9 +200,11 @@ function render(): void {
             ? placeScreen(state)
             : state.route.name === 'bookings'
               ? bookingsScreen(state)
-              : state.route.name === 'trip'
-          ? tripScreen(state)
-          : libraryScreen(state);
+              : state.route.name === 'hotel'
+                ? hotelScreen(state)
+                : state.route.name === 'trip'
+                  ? tripScreen(state)
+                  : libraryScreen(state);
 
   root.innerHTML = (state.flash ? `<div class="install">${escapeText(state.flash)}</div>` : '') + screen;
   window.scrollTo({ top: scroll });
@@ -325,17 +328,17 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       break;
 
     case 'nearby-sort': {
-      if (el.dataset.sort !== 'near') {
-        state.nearbySort = 'az';
+      if (el.dataset.sort !== 'me') {
+        state.nearbySort = 'hotel';
         render();
         break;
       }
       // Una lectura por toque, no un seguimiento continuo (§8.3): volver a
-      // tocar «Nearest» la refresca.
+      // tocar «From where I am» la refresca.
       const position = await currentPosition();
       if (position) {
         state.position = position;
-        state.nearbySort = 'near';
+        state.nearbySort = 'me';
         state.flash = null;
       } else {
         state.flash = 'Location not available. Check that the app is allowed to use it.';

@@ -54,6 +54,17 @@ export interface DogPolicy {
   confidence: Confidence;
 }
 
+/**
+ * Una foto. `src` es un `data:` URI: va dentro del archivo de viaje para que
+ * funcione sin red. `credit` es obligatorio en la práctica (autor y licencia),
+ * porque las fotos libres lo exigen. `caption` dice qué se ve.
+ */
+export interface Photo {
+  src: string;
+  credit?: string | null;
+  caption?: Localized | null;
+}
+
 export interface Place {
   id: string;
   name: string;
@@ -89,9 +100,9 @@ export interface Place {
    * viaje para que funcione sin red. `credit` es obligatorio en la práctica
    * (autor y licencia), porque las fotos libres lo exigen.
    */
-  photo?: { src: string; credit?: string | null } | null;
-  /** Más fotos, con las mismas reglas que `photo`. Salen detrás de ella, en una tira que se desliza. */
-  gallery?: { src: string; credit?: string | null }[];
+  photo?: Photo | null;
+  /** Más fotos, con las mismas reglas que `photo`. En la página del sitio se reparten entre las secciones del texto. */
+  gallery?: Photo[];
   links?: {
     wikipedia?: Localized | null;
     official?: string | null;
@@ -175,6 +186,8 @@ export interface Stay {
   notes?: Localized | null;
   /** Zona del alojamiento. Los sitios con la misma `area` son los de alrededor. */
   area?: string | null;
+  /** Color de la zona en la app (hex). Si falta, se asigna uno por orden de zonas. */
+  color?: string | null;
 }
 
 export type BookingKind = 'flight' | 'activity' | 'transfer';
@@ -212,6 +225,8 @@ export interface TripPayload {
   bookings?: Booking[];
   places: Record<string, Place>;
   days: Day[];
+  /** Foto de portada del viaje. Si falta, se usa la del primer sitio con foto. */
+  cover?: Photo | null;
 }
 
 /* ── Sobre común (§4.1) ──────────────────────────────────────────────── */

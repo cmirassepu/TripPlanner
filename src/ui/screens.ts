@@ -1,10 +1,15 @@
 /**
  * Las pantallas. Cada una devuelve HTML; la app lo pone y engancha los eventos
- * por delegación. Sin framework: son cinco pantallas sobre un estado pequeño, y
+ * por delegación. Sin framework: son pocas pantallas sobre un estado pequeño, y
  * el bundle se cachea entero, así que cada kilobyte se paga en el aeropuerto.
+ *
+ * El diseño sale de la maqueta aprobada: la pantalla del viaje con la portada y
+ * las estancias; el día con tres pestañas (línea de tiempo, sitios, reservas);
+ * la página del sitio con la lectura larga y las fotos repartidas; y la del
+ * hotel, con la dirección en el idioma local para enseñarla al taxista.
  */
 
-import type { TripPayload, Day, Place, Stay, Booking, Note } from '../model/types.ts';
+import type { TripPayload, Day, Place, Stay, Booking, Note, Photo } from '../model/types.ts';
 import type { AppState } from './state.ts';
 import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab, type NearbyFilter } from './state.ts';
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
@@ -12,10 +17,11 @@ import { formatClock, formatDuration } from '../core/time.ts';
 import { isOpenAt, whyClosed, windowsFor } from '../core/hours.ts';
 import { haversine, formatDistance } from '../core/geo.ts';
 import { esc, pick, longDate } from '../render/day.ts';
-import { storyHtml, readingMinutes } from '../render/story.ts';
+import { storySections, readingMinutes } from '../render/story.ts';
 import { summarise, sortForLibrary } from '../library/library.ts';
 import { formatBytes, installHint } from '../store/install.ts';
 import { verdict, type ProbeInfo, type ProbeResult } from '../spike/opfs.ts';
+import { ICONS, categoryIcon, legIcon } from './icons.ts';
 
 /* ── Cromo ───────────────────────────────────────────────────────────── */
 
@@ -24,6 +30,104 @@ export function installBanner(state: AppState): string {
   return `<div class="install"><strong>Add it to your home screen</strong>${esc(
     installHint(),
   )}</div>`;
+}
+
+const NOT_FOUND = `<p class="empty">Day not found.</p>`;
+
+/** Categorías que no son «sitios que ver»: ya salen en la línea de tiempo o en las reservas. */
+const NOT_SIGHTS = new Set(['lodging', 'transport']);
+
+const LABELS: Record<string, string> = {
+  temple: 'Temple',
+  market: 'Market',
+  museum: 'Museum',
+  park: 'Park',
+  food: 'Eat',
+  viewpoint: 'Viewpoint',
+  activity: 'Activity',
+  beach: 'Beach',
+  village: 'Village',
+  lodging: 'Hotel',
+  transport: 'Transport',
+};
+const label = (category: string | null | undefined) => LABELS[category ?? ''] ?? category ?? '';
+
+/* ── Colores de zona ─────────────────────────────────────────────────── */
+
+/** Un color por zona, en el orden en que se duerme en ellas. `Stay.color` manda si existe. */
+const PALETTE = ['#C65D21', '#5C8A3A', '#2E6F55', '#1E8DA6', '#1C9C8A', '#8A4F9E', '#B0433E'];
+
+function areaColor(plan: TripPayload, area: string | null | undefined): string {
+  const areas: string[] = [];
+  for (const st of plan.stays) {
+    const a = st.area ?? st.name;
+    if (!areas.includes(a)) areas.push(a);
+    if (a === area && st.color) return st.color;
+  }
+  const i = area ? areas.indexOf(area) : -1;
+  return PALETTE[(i < 0 ? 0 : i) % PALETTE.length];
+}
+
+const areaStyle = (color: string) => `style="--a:${esc(color)}"`;
+
+/* ── Fotos ───────────────────────────────────────────────────────────── */
+
+/** Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red. */
+const isPhoto = (p: Photo | null | undefined): p is Photo => !!p?.src.startsWith('data:image/');
+
+const photosOf = (place: Place | undefined): Photo[] =>
+  place ? [place.photo, ...(place.gallery ?? [])].filter(isPhoto) : [];
+
+const firstPhoto = (place: Place | undefined): Photo | undefined => photosOf(place)[0];
+
+/** La portada del viaje: la que diga el archivo, o la del primer sitio que ver con foto (ni hotel, ni transporte, ni comida). */
+function coverOf(plan: TripPayload): Photo | undefined {
+  if (isPhoto(plan.cover)) return plan.cover;
+  for (const day of plan.days) {
+    for (const w of day.waypoints) {
+      const place = plan.places[w.place];
+      const category = place?.category ?? '';
+      if (place && !NOT_SIGHTS.has(category) && category !== 'food' && firstPhoto(place)) return firstPhoto(place);
+    }
+  }
+  return Object.values(plan.places).map(firstPhoto).find(Boolean);
+}
+
+/** «Sunday 20 December»: el año sobra en un viaje de tres semanas. */
+function longDay(iso: string): string {
+  return new Date(`${iso}T12:00:00`)
+    .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+    .replace(',', '');
+}
+
+/** La primera nota que dice algo de ese día; la coletilla de «horas estimadas» va en la letra pequeña. */
+function firstNote(notes: Note[] | undefined): Note | undefined {
+  return (notes ?? []).find((n) => !/^Estimated times/i.test(n.text?.en ?? ''));
+}
+
+/** Foto que representa una zona: la del primer sitio con foto de esa zona. */
+function areaPhoto(plan: TripPayload, area: string | null | undefined): Photo | undefined {
+  return Object.values(plan.places)
+    .filter((p) => area && p.area === area && !NOT_SIGHTS.has(p.category ?? ''))
+    .map(firstPhoto)
+    .find(Boolean);
+}
+
+/* ── Fechas ──────────────────────────────────────────────────────────── */
+
+/** «Sat 19 Dec». Sin la coma: en una columna estrecha sobra. */
+function niceDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`)
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace(',', '');
+}
+
+const daysBetween = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T12:00:00`) - Date.parse(`${a}T12:00:00`)) / 86_400_000);
+
+/** «Day 3 of 23». */
+function dayNumber(plan: TripPayload, day: Day): string {
+  return `day ${plan.days.indexOf(day) + 1} of ${plan.days.length}`;
 }
 
 /* ── Librería (§11.1) ────────────────────────────────────────────────── */
@@ -46,13 +150,19 @@ export function libraryScreen(state: AppState): string {
   const rows = sortForLibrary(summaries.map((s) => s.summary))
     .map((s) => {
       const stored = summaries.find((x) => x.summary.title === s.title)!.stored;
-      const label = { active: 'under way', upcoming: 'upcoming', finished: 'finished' }[s.status];
-      return `<li><button class="trip" data-go="${esc(
-        routeHash({ name: 'trip', tripId: stored.tripId }),
-      )}">
-        <span class="tag ${s.status === 'active' ? 'active' : ''}">${label}</span>
-        <h3>${esc(s.title)}</h3>
-        <p class="meta">${esc(s.startDate)} → ${esc(s.endDate)} · ${s.days} days</p>
+      const plan = stored.plan;
+      const cover = coverOf(plan);
+      const tag =
+        s.status === 'active'
+          ? `Day ${daysBetween(plan.startDate, todayIso) + 1} of ${plan.days.length}`
+          : s.status === 'upcoming'
+            ? `Starts in ${daysBetween(todayIso, plan.startDate)} days`
+            : 'Finished';
+      return `<li><button class="trip" data-go="${esc(routeHash({ name: 'trip', tripId: stored.tripId }))}">
+        <span class="pic">${cover ? `<img src="${esc(cover.src)}" alt="">` : ''}</span>
+        <span><h3>${esc(s.title)}</h3>
+          <p class="meta">${esc(niceDate(plan.startDate))} → ${esc(niceDate(plan.endDate))} · ${s.days} days</p>
+          <p class="tag">${esc(tag)}</p></span>
       </button></li>`;
     })
     .join('');
@@ -68,51 +178,98 @@ function loadButton(): string {
   return `<label class="btn ghost">Load trip file<input type="file" accept=".json,application/json" data-act="load-file" hidden></label>`;
 }
 
-/* ── Índice del viaje ────────────────────────────────────────────────── */
+/* ── Pantalla del viaje ──────────────────────────────────────────────── */
+
+/** Los días que se duermen en una estancia: por `day.stay`, o por fecha si el día no lo dice. */
+function daysOfStay(plan: TripPayload, stay: Stay): Day[] {
+  return plan.days.filter((d) => (d.stay ? d.stay === stay.id : stay.from <= d.date && d.date < stay.to));
+}
 
 export function tripScreen(state: AppState): string {
   const plan = state.plan;
   if (!plan) return `<p class="empty">Trip not found.</p>`;
   const todayIso = today(state.clock);
   const tripId = state.route.name === 'trip' ? state.route.tripId : '';
+  const lang = plan.primaryLanguage;
+  const cover = coverOf(plan);
 
-  const rows = plan.days
-    .map((d) => {
-      const schedule = computeSchedule(d);
-      const isToday = d.date === todayIso;
-      return `<li><button class="dayrow ${isToday ? 'today' : ''}" data-go="${esc(
-        routeHash({ name: 'day', tripId, dayId: d.id, tab: 'plan' }),
+  // La tarjeta de «hoy»: el día en curso o, fuera del viaje, el primero.
+  const todayDay = plan.days.find((d) => d.date === todayIso) ?? plan.days[0];
+  const todayStay = todayDay && plan.stays.find((st) => st.id === todayDay.stay);
+  const todayCard = todayDay
+    ? `<button class="today" ${areaStyle(areaColor(plan, todayStay?.area))} data-go="${esc(
+        routeHash({ name: 'day', tripId, dayId: todayDay.id, tab: 'timeline' }),
       )}">
-        <b>${esc(shortDate(d.date))}</b>
-        <span>${esc(pick(d.title, plan.primaryLanguage) ?? d.id)}
-          <span class="alt"> · ${
-            d.waypoints.length
-              ? `${d.waypoints.length} ${d.waypoints.length === 1 ? 'stop' : 'stops'} · ${esc(d.startTime)}–${esc(formatClock(schedule.end))}`
-              : esc(plan.stays.find((st) => st.id === d.stay)?.name ?? 'Free day')
-          }</span>
-        </span>
-      </button></li>`;
+        <span><p class="eyebrow a">${todayDay.date === todayIso ? 'Today' : 'First day'} · ${esc(dayNumber(plan, todayDay))}${
+          todayStay?.area ? ` · ${esc(todayStay.area)}` : ''
+        }</p>
+        <h3>${esc(pick(todayDay.title, lang) ?? todayDay.id)}</h3>
+        <p class="meta">${esc(longDay(todayDay.date))}${todayDay.startTime ? ` · starts at ${esc(todayDay.startTime)}` : ''}</p></span>
+        <span class="go">${ICONS.chev}</span></button>`
+    : '';
+
+  const stays = plan.stays
+    .map((st, i) => {
+      const color = areaColor(plan, st.area);
+      const photo = areaPhoto(plan, st.area) ?? firstPhoto(st.place ? plan.places[st.place] : undefined);
+      const days = daysOfStay(plan, st);
+      const open = days.some((d) => d.date === todayIso) || (todayIso < plan.startDate && i === 0);
+      const legs = (plan.bookings ?? []).filter((b) => b.date === st.to && (b.kind === 'flight' || b.kind === 'transfer'));
+      const leg = legs[0];
+      const rows = days
+        .map(
+          (d) => `<li><a href="${esc(routeHash({ name: 'day', tripId, dayId: d.id, tab: 'timeline' }))}" class="${
+            d.date === todayIso ? 'is-today' : ''
+          }"><span class="d">${esc(niceDate(d.date).replace(/ \w+$/, ''))}</span><span class="t">${esc(
+            pick(d.title, lang) ?? d.id,
+          )}</span></a></li>`,
+        )
+        .join('');
+      return `<details ${open ? 'open' : ''} ${areaStyle(color)}>
+        <summary class="stay">
+          <span class="pic">${photo ? `<img src="${esc(photo.src)}" alt="">` : ''}<span class="n">${i + 1}</span></span>
+          <span><h3>${esc(st.area ?? st.name)}</h3>
+            <p class="meta">${days.length} night${days.length === 1 ? '' : 's'} · ${esc(niceDate(st.from))} → ${esc(niceDate(st.to))}</p>
+            <p class="meta">${esc(st.name)}</p></span>
+          <span class="open">${ICONS.chev}</span>
+        </summary>
+        <ul class="days">${rows}</ul>
+      </details>
+      ${
+        leg
+          ? `<div class="leg"><span class="chip">${legIcon(leg.kind, pick(leg.title, lang) ?? '')} ${esc(
+              (pick(leg.title, lang) ?? '').split(' · ')[0],
+            )}</span></div>`
+          : ''
+      }`;
     })
     .join('');
 
   return `${installBanner(state)}
-    <div class="bar"><a class="back" href="#/">‹ Trips</a></div>
-    <h1>${esc(pick(plan.title, plan.primaryLanguage) ?? tripId)}</h1>
-    <p class="meta">${esc(plan.startDate)} → ${esc(plan.endDate)} · ${esc(plan.defaultTimezone)}</p>
-    <ul class="days"><li><button class="dayrow" data-go="${esc(
-      routeHash({ name: 'bookings', tripId }),
-    )}"><b>All</b><span class="grow">Bookings</span><span class="go">›</span></button></li></ul>
-    <ul class="days">${rows}</ul>`;
+    <div class="cover">${cover ? `<img src="${esc(cover.src)}" alt="">` : ''}<div class="shade"></div>
+      <a class="back" href="#/">${ICONS.back} Trips</a>
+      <div class="text"><p class="eyebrow">${esc(niceDate(plan.startDate))} – ${esc(niceDate(plan.endDate))}</p>
+        <h1>${esc(pick(plan.title, lang) ?? tripId)}</h1>
+        <p class="meta">${daysBetween(plan.startDate, plan.endDate)} nights · ${plan.stays.length} stays</p></div></div>
+    ${todayCard}
+    <div class="section"><h2>Where we stay</h2><a class="chip" href="${esc(routeHash({ name: 'bookings', tripId }))}">All bookings</a></div>
+    <div class="stays">${stays}</div>`;
 }
 
 /* ── Día ─────────────────────────────────────────────────────────────── */
 
+const DAY_TABS: ReadonlyArray<readonly [DayTab, string]> = [
+  ['timeline', 'Timeline'],
+  ['places', 'Places'],
+  ['bookings', 'Bookings'],
+];
+
 /**
- * El día tiene tres vistas: el plan, lo que hay por la zona y las reservas.
+ * El día tiene tres vistas: la línea de tiempo, los sitios y las reservas.
  *
- * En el plan sólo va lo que hace falta para actuar en la próxima hora: cuándo,
- * dónde y el plazo que manda. El resto vive en la página de cada parada, a un
- * toque. No se marca nada: la línea de «ahora» la mueve el reloj.
+ * En la línea de tiempo sólo va lo que hace falta para actuar en la próxima
+ * hora: cuándo, dónde y el plazo que manda. El resto vive en la página de cada
+ * parada, a un toque. No se marca nada: la línea de «ahora» la mueve el reloj.
  */
 export function dayScreen(state: AppState): string {
   const plan = state.plan;
@@ -122,35 +279,44 @@ export function dayScreen(state: AppState): string {
   if (!day) return NOT_FOUND;
 
   const lang = plan.primaryLanguage;
+  const stay = plan.stays.find((st) => st.id === day.stay);
   const tabs = DAY_TABS.map(
-    ([tab, label]) =>
-      `<button data-swap="${esc(routeHash({ ...route, tab }))}" aria-pressed="${route.tab === tab}">${label}</button>`,
+    ([tab, text]) =>
+      `<button data-swap="${esc(routeHash({ ...route, tab }))}" aria-pressed="${route.tab === tab}">${text}</button>`,
   ).join('');
 
   const body =
-    route.tab === 'nearby'
-      ? nearbyBody(state, plan, route.tripId, day)
+    route.tab === 'places'
+      ? placesBody(state, plan, route.tripId, day)
       : route.tab === 'bookings'
-        ? bookingsBody(plan, day)
-        : planBody(state, plan, route.tripId, day);
+        ? bookingsBody(plan, route.tripId, day)
+        : timelineBody(state, plan, route.tripId, day);
 
-  return `${installBanner(state)}
-    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+  return `<div class="screen" ${areaStyle(areaColor(plan, stay?.area))}>${installBanner(state)}
+    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">${ICONS.back} ${esc(
       pick(plan.title, lang) ?? 'Trip',
     )}</a>${pager(plan, route)}</div>
-    <p class="date">${esc(longDate(day.date, lang))}</p>
+    <p class="eyebrow a">${esc(longDay(day.date))}${stay?.area ? ` · ${esc(stay.area)}` : ''} · ${esc(dayNumber(plan, day))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
     <div class="tabs">${tabs}</div>
-    ${body}`;
+    ${body}</div>`;
 }
 
-const DAY_TABS: ReadonlyArray<readonly [DayTab, string]> = [
-  ['plan', 'Plan'],
-  ['nearby', 'Nearby'],
-  ['bookings', 'Bookings'],
-];
+/** Las flechas de anterior y siguiente. Hacen lo mismo que deslizar el dedo. */
+function pager(plan: TripPayload, route: Route): string {
+  const { prev, next } = neighbours(plan, route);
+  const arrow = (to: Route | null, glyph: string, text: string) =>
+    to
+      ? `<button class="chip" data-swap="${esc(routeHash(to))}" aria-label="${text}">${glyph}</button>`
+      : `<span class="chip off" aria-hidden="true">${glyph}</span>`;
+  return `<div class="arrows">${arrow(prev, ICONS.back, 'Previous')}${arrow(next, ICONS.chev, 'Next')}</div>`;
+}
 
-function planBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
+type Stop = Schedule['stops'][number];
+
+/* ── Línea de tiempo ─────────────────────────────────────────────────── */
+
+function timelineBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
   // El reloj sólo dice algo el día en cuestión: mirar el 23 de diciembre desde
   // octubre no es ir seis horas tarde.
   const now = day.date === today(state.clock) ? nowMinutes(state.clock) : null;
@@ -168,85 +334,245 @@ function planBody(state: AppState, plan: TripPayload, tripId: string, day: Day):
   }
   if (!nowShown && schedule.stops.length) rows.push(nowLine(now!));
 
-  return `${intro ? `<p class="lead">${esc(intro)}</p>` : ''}
+  return `${intro ? `<p class="intro">${esc(intro)}</p>` : ''}
     ${deadlinePanel(plan, day, schedule, now)}
-    ${rows.length ? `<ul class="days">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}`;
+    ${rows.length ? `<ul class="tl">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}`;
 }
 
-/* ── Por la zona ─────────────────────────────────────────────────────── */
+const nowLine = (now: number) => `<li class="nowline">Now · ${esc(formatClock(now))}</li>`;
+
+/** La estancia a la que pertenece un sitio de categoría `lodging`, para abrir su página. */
+function stayOfPlace(plan: TripPayload, day: Day, placeId: string): Stay | undefined {
+  return plan.stays.find((st) => st.place === placeId) ?? plan.stays.find((st) => st.id === day.stay);
+}
+
+function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: number | null): string {
+  const w = stop.waypoint;
+  const place = plan.places[w.place];
+  const lang = plan.primaryLanguage;
+  const isMeal = (w.choices?.length ?? 0) > 0;
+  const isSight = !!place && !NOT_SIGHTS.has(place.category ?? '') && !isMeal;
+
+  const past = now !== null && stop.leave <= now;
+  const current = now !== null && stop.arrive <= now && now < stop.leave;
+  const classes = [
+    w.priority === 'key' ? 'key' : '',
+    w.priority === 'optional' ? 'optional' : '',
+    isMeal ? 'meal' : '',
+    past ? 'past' : '',
+    current ? 'current' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  // El hotel abre su propia página; lo demás, la de la parada.
+  const stay = place?.category === 'lodging' ? stayOfPlace(plan, day, w.place) : undefined;
+  const href = stay
+    ? routeHash({ name: 'hotel', tripId, stayId: stay.id })
+    : routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id });
+
+  const photo = isSight ? firstPhoto(place) : undefined;
+  const icon = photo ? `<img src="${esc(photo.src)}" alt="" loading="lazy">` : categoryIcon(place?.category);
+
+  const dead = w.anchor ? withTime(pick(w.anchor.label, lang) ?? w.anchor.type, w.anchor.time) : '';
+  const closed = closedOnArrival(place, day, stop) ? 'Closed when you arrive' : '';
+  const note = firstNote(w.notes);
+  const choices = (w.choices ?? [])
+    .map((id) => plan.places[id])
+    .filter((pl): pl is Place => !!pl)
+    .map((pl) => {
+      const ph = firstPhoto(pl);
+      return `<a class="chip ${ph ? '' : 'plain'}" href="${esc(
+        routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }),
+      )}">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : ''}${esc(pl.name)}</a>`;
+    })
+    .join('');
+
+  return `<li class="${classes}">
+    <div class="t">${esc(formatClock(stop.arrive))}${
+      w.duration >= 15 ? `<small>until ${esc(formatClock(stop.leave))}</small>` : ''
+    }</div>
+    <div class="ic">${icon}</div>
+    <div class="body"><a class="name" href="${esc(href)}">${esc(place?.name ?? w.place)}</a>
+      ${dead ? `<p class="dead">${esc(dead)}</p>` : ''}
+      ${closed ? `<p class="note warn">${closed}</p>` : ''}
+      ${note ? `<p class="note ${note.type === 'warn' ? 'warn' : ''}">${esc(pick(note.text, lang) ?? '')}</p>` : ''}
+      ${choices ? `<div class="chips">${choices}</div>` : ''}
+    </div></li>`;
+}
+
+const closedOnArrival = (place: Place | undefined, day: Day, stop: Stop): boolean =>
+  !!place && isOpenAt(place.hours, day.date, stop.arrive).state === 'closed';
+
+/** Muchas etiquetas ya dicen la hora; repetirla detrás sólo mete ruido. */
+const withTime = (text: string, time: string) => (text.includes(time) ? text : `${text} · ${time}`);
+
+/**
+ * El plazo que manda. Sólo cuentan los que se pueden perder: la hora de
+ * entrada a un hotel no es uno de ellos.
+ *
+ * Un día `transit` es un reloj (§4.5), así que el plazo va en grande y con
+ * cuenta atrás. En los demás días es una franja discreta.
+ */
+function deadlinePanel(plan: TripPayload, day: Day, schedule: Schedule, now: number | null): string {
+  const lang = plan.primaryLanguage;
+  const deadlines = schedule.stops.filter(
+    (s) => s.waypoint.anchor && s.waypoint.anchor.type !== 'opening',
+  );
+  if (!deadlines.length) return '';
+
+  const text = (s: Stop) =>
+    pick(s.waypoint.anchor!.label, lang) ?? plan.places[s.waypoint.place]?.name ?? s.waypoint.place;
+  const next = now === null ? deadlines[0] : deadlines.find((s) => parseAnchor(s) > now);
+
+  if (day.type !== 'transit') {
+    if (!next) return '';
+    const at = parseAnchor(next);
+    const left = now === null ? '' : ` · ${formatDuration(at - now)} left`;
+    return `<div class="alert amber"><p>${esc(withTime(text(next), next.waypoint.anchor!.time))}${esc(left)}</p></div>`;
+  }
+
+  const big = (t: string) =>
+    `<h1 style="font-size:3rem;font-variant-numeric:tabular-nums;margin:.2rem 0">${esc(t)}</h1>`;
+
+  if (!next) {
+    return `<div class="panel">
+      <p class="meta">${esc(text(deadlines[deadlines.length - 1]))}</p>
+      <p class="verdict ok">No deadlines left today.</p>
+    </div>`;
+  }
+
+  // En grande va siempre la hora del plazo: la de salida del vuelo, no la del
+  // cierre de facturación. Debajo, a qué hora hay que estar allí y, el día en
+  // cuestión, cuánto falta.
+  const at = parseAnchor(next);
+  const place = plan.places[next.waypoint.place]?.name ?? next.waypoint.place;
+  const beThere =
+    next.waypoint.anchor!.type === 'departure' && next.arrive < at
+      ? `Be at ${place} by ${formatClock(next.arrive)}`
+      : '';
+
+  if (now === null) {
+    return `<div class="panel">
+      <p class="meta">${esc(text(next))}</p>
+      ${big(next.waypoint.anchor!.time)}
+      <p class="verdict ok">${esc(beThere || `The plan starts at ${day.startTime}`)}</p>
+    </div>`;
+  }
+
+  const left = at - now;
+  const urgent = left <= 30;
+  return `<div class="panel">
+    <p class="meta">${esc(text(next))}</p>
+    ${big(next.waypoint.anchor!.time)}
+    <p class="verdict ${urgent ? 'bad' : 'ok'}">${esc(
+      [`${formatDuration(left)} to go`, beThere].filter(Boolean).join(' · '),
+    )}</p>
+  </div>`;
+}
+
+const parseAnchor = (s: { waypoint: { anchor?: { time: string } | null } }): number => {
+  const t = s.waypoint.anchor?.time ?? '00:00';
+  return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+};
+
+/* ── Sitios ──────────────────────────────────────────────────────────── */
 
 const NEARBY_FILTERS: ReadonlyArray<readonly [NearbyFilter, string]> = [
   ['all', 'All'],
-  ['see', 'See and do'],
+  ['see', 'See & do'],
   ['eat', 'Eat'],
 ];
 
-/** Categorías que no son «sitios que ver»: ya salen en el plan o en las reservas. */
-const NOT_SIGHTS = new Set(['lodging', 'transport']);
+/** Una fila de sitio: foto cuadrada, categoría, nombre y una línea. */
+function spot(plan: TripPayload, tripId: string, day: Day, pl: Place, line: string): string {
+  const ph = firstPhoto(pl);
+  return `<li><a class="spot" href="${esc(routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }))}">
+    <span class="pic">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
+    <span><p class="eyebrow">${esc(label(pl.category))}</p><span class="name">${esc(pl.name)}</span>${
+      line ? `<p class="line">${esc(line)}</p>` : ''
+    }</span></a></li>`;
+}
 
 /**
- * Todo lo apuntado en la zona donde se duerme ese día, esté o no en el plan.
- * Es el plan B: si algo está cerrado, llueve o no apetece, aquí hay de dónde tirar.
+ * Lo que se visita hoy, en el orden del día pero sin horas (para eso está la
+ * línea de tiempo); las comidas con sus opciones; y todo lo demás apuntado en
+ * la zona, por cercanía. Es el plan B: si algo está cerrado, llueve o no
+ * apetece, aquí hay de dónde tirar.
  */
-function nearbyBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
-  const filter: NearbyFilter = state.nearby;
-  const here = state.nearbySort === 'near' ? state.position : null;
-  const metres = (pl: Place) => (here && pl.coords ? haversine(here, pl.coords) : null);
+function placesBody(state: AppState, plan: TripPayload, tripId: string, day: Day): string {
+  const lang = plan.primaryLanguage;
+  const schedule = computeSchedule(day);
+  const seen = new Set<string>();
+  const sights: string[] = [];
+  const meals: string[] = [];
 
-  const area = plan.stays.find((st) => st.id === day.stay)?.area;
-  const places = Object.values(plan.places)
-    .filter((pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? ''))
-    // Por cercanía si hay posición; los sitios sin coordenadas, al final. Si no, alfabético.
+  for (const s of schedule.stops) {
+    const w = s.waypoint;
+    const pl = plan.places[w.place];
+    if (!pl) continue;
+    if (w.choices?.length) {
+      const options = w.choices
+        .map((id) => plan.places[id])
+        .filter((p): p is Place => !!p && !seen.has(p.id))
+        .map((p) => {
+          seen.add(p.id);
+          return spot(plan, tripId, day, p, pick(p.deep, lang) ?? '');
+        })
+        .join('');
+      meals.push(`<li><p class="eyebrow a">${esc(pl.name)} · pick by mood</p><ul class="spots">${options}</ul></li>`);
+      continue;
+    }
+    if (NOT_SIGHTS.has(pl.category ?? '') || seen.has(pl.id)) continue;
+    seen.add(pl.id);
+    const ph = firstPhoto(pl);
+    sights.push(`<li><a class="card" href="${esc(routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id }))}">
+      <span class="pic">${ph ? `<img src="${esc(ph.src)}" alt="" loading="lazy">` : categoryIcon(pl.category)}</span>
+      <p class="eyebrow">${esc(label(pl.category))}</p><h3>${esc(pl.name)}</h3>
+      <p class="line">${esc(pick(pl.deep, lang) ?? '')}</p></a></li>`);
+  }
+
+  // Lo demás de la zona, medido desde el hotel o, si se ha pedido, desde donde se está.
+  const stay = plan.stays.find((st) => st.id === day.stay);
+  const area = stay?.area;
+  const hotel = stay?.place ? plan.places[stay.place]?.coords : null;
+  const fromMe = state.nearbySort === 'me' && !!state.position;
+  const origin = fromMe ? state.position : hotel;
+  const metres = (pl: Place) => (origin && pl.coords ? haversine(origin, pl.coords) : null);
+  const kind = (pl: Place) => (pl.category === 'food' ? 'eat' : 'see');
+
+  const near = Object.values(plan.places)
+    .filter((pl) => area && pl.area === area && !NOT_SIGHTS.has(pl.category ?? '') && !seen.has(pl.id))
+    .filter((pl) => state.nearby === 'all' || kind(pl) === state.nearby)
     .sort((a, b) => {
       const da = metres(a);
       const db = metres(b);
       if (da !== null && db !== null) return da - db;
       if (da !== null || db !== null) return da !== null ? -1 : 1;
       return a.name.localeCompare(b.name);
-    });
-  if (!places.length) return '<p class="empty">No places listed for this area yet.</p>';
-
-  const row = (pl: Place) => {
-    const planned = plan.days.find((d) => d.waypoints.some((w) => w.place === pl.id));
-    const away = metres(pl);
-    const sub = [
-      away !== null ? formatDistance(away) : here ? 'distance unknown' : '',
-      pl.category,
-      planned ? `planned ${shortDate(planned.date)}` : '',
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    return `<li><button class="dayrow" data-go="${esc(
-      routeHash({ name: 'place', tripId, dayId: day.id, placeId: pl.id }),
-    )}"><span class="grow">${esc(pl.name)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span><span class="go">›</span></button></li>`;
-  };
-  const group = (title: string, list: Place[]) =>
-    list.length ? `<h3 class="group">${title}</h3><ul class="days">${list.map(row).join('')}</ul>` : '';
-
-  const eat = places.filter((pl) => pl.category === 'food');
-  const see = places.filter((pl) => pl.category !== 'food');
+    })
+    .map((pl) => {
+      const away = metres(pl);
+      const where = away !== null ? `${formatDistance(away)} ${fromMe ? 'from you' : 'from the hotel'}` : '';
+      return spot(plan, tripId, day, pl, [where, pick(pl.deep, lang) ?? ''].filter(Boolean).join(' · '));
+    })
+    .join('');
 
   const chips = NEARBY_FILTERS.map(
-    ([key, label]) =>
-      `<button class="chip" data-act="nearby" data-filter="${key}" aria-pressed="${filter === key}">${label}</button>`,
+    ([key, text]) =>
+      `<button class="chip" data-act="nearby" data-filter="${key}" aria-pressed="${state.nearby === key}">${text}</button>`,
   ).join('');
+  const fromWhere = hotel
+    ? `<button class="chip" data-act="nearby-sort" data-sort="${fromMe ? 'hotel' : 'me'}">${
+        fromMe ? 'From the hotel' : 'From where I am'
+      }</button>`
+    : '';
 
-  // Con «All» se ven los dos grupos con su título; con un filtro, sólo la lista.
-  const lists =
-    filter === 'see'
-      ? `<ul class="days">${see.map(row).join('')}</ul>`
-      : filter === 'eat'
-        ? `<ul class="days">${eat.map(row).join('')}</ul>`
-        : group('See and do', see) + group('Eat', eat);
-
-  const sort = (key: 'az' | 'near', label: string) =>
-    `<button class="chip" data-act="nearby-sort" data-sort="${key}" aria-pressed="${
-      state.nearbySort === key
-    }">${label}</button>`;
-
-  return `<div class="filters"><span class="meta grow">${esc(area!)}</span>${chips}</div>
-    <div class="filters"><span class="meta grow">Sort</span>${sort('az', 'A–Z')}${sort('near', 'Nearest')}</div>
-    ${lists}`;
+  return `${sights.length ? `<div class="section"><h2>Today</h2><span class="meta">${sights.length} places</span></div><ul class="cards">${sights.join('')}</ul>` : ''}
+    ${meals.length ? `<div class="section"><h2>Food &amp; snacks</h2><span class="meta">by mood</span></div><ul class="meals">${meals.join('')}</ul>` : ''}
+    <div class="section"><h2>Also around here</h2><span class="meta">${esc(area ?? '')}</span></div>
+    <div class="filters">${chips}<span class="grow"></span>${fromWhere}</div>
+    ${near ? `<ul class="spots">${near}</ul>` : '<p class="empty">Nothing else listed for this area yet.</p>'}`;
 }
 
 /* ── Reservas ────────────────────────────────────────────────────────── */
@@ -255,8 +581,10 @@ function nearbyBody(state: AppState, plan: TripPayload, tripId: string, day: Day
 interface BookingCard {
   date: string;
   kind: string;
+  icon: string;
   when: string;
   title: string;
+  href?: string;
   status?: Booking['status'];
   ref?: string | null;
   provider?: string | null;
@@ -264,19 +592,19 @@ interface BookingCard {
   lines: string[];
 }
 
-function cardOfStay(plan: TripPayload, stay: Stay): BookingCard {
+function cardOfStay(plan: TripPayload, tripId: string, stay: Stay): BookingCard {
   const lang = plan.primaryLanguage;
   const place = stay.place ? plan.places[stay.place] : undefined;
   return {
     date: stay.from,
     kind: 'Hotel',
-    when: `${shortDate(stay.from)} → ${shortDate(stay.to)}`,
+    icon: ICONS.bed,
+    when: `${niceDate(stay.from)} → ${niceDate(stay.to)}`,
     title: stay.name,
+    href: routeHash({ name: 'hotel', tripId, stayId: stay.id }),
     ref: stay.confirmation,
     place,
-    lines: [pick(stay.notes, lang), ...(place?.facts ?? []).map((f) => pick(f.text, lang))].filter(
-      (l): l is string => !!l,
-    ),
+    lines: [pick(stay.notes, lang)].filter((l): l is string => !!l),
   };
 }
 
@@ -285,7 +613,8 @@ function cardOfBooking(plan: TripPayload, b: Booking): BookingCard {
   return {
     date: b.date,
     kind: { flight: 'Flight', activity: 'Activity', transfer: 'Transfer' }[b.kind],
-    when: shortDate(b.date),
+    icon: b.kind === 'flight' ? ICONS.plane : b.kind === 'transfer' ? ICONS.car : ICONS.walk,
+    when: niceDate(b.date),
     title: pick(b.title, lang) ?? b.id,
     status: b.status,
     ref: b.ref,
@@ -303,27 +632,31 @@ function bookingCard(c: BookingCard): string {
       : c.status === 'pending'
         ? '<p class="verdict">Requested, not confirmed yet</p>'
         : '';
-  return `<div class="panel">
-    <p class="meta">${esc(c.kind)} · ${esc(c.when)}</p>
+  const body = `<div class="ic">${c.icon}</div><div>
+    <p class="eyebrow">${esc(c.kind)} · ${esc(c.when)}</p>
     <h3>${esc(c.title)}</h3>
     ${c.ref ? `<p class="ref">${esc(c.ref)}</p>` : ''}
     ${status}
     <dl>
       ${c.provider ? `<dt>With</dt><dd>${esc(c.provider)}</dd>` : ''}
       ${c.place?.address ? `<dt>Address</dt><dd>${esc(c.place.address)}</dd>` : ''}
-      ${c.place?.addressLocal ? `<dt></dt><dd>${esc(c.place.addressLocal)}</dd>` : ''}
-      ${phone ? `<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>` : ''}
+      ${phone ? `<dt>Phone</dt><dd>${esc(phone)}</dd>` : ''}
     </dl>
     ${c.lines.length ? `<ul>${c.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
   </div>`;
+  return c.href
+    ? `<a class="panel bk" href="${esc(c.href)}">${body}</a>`
+    : `<div class="panel bk">${body}</div>`;
 }
 
 /** Las reservas que hacen falta ese día: el vuelo, lo reservado y dónde se duerme. */
-function bookingsBody(plan: TripPayload, day: Day): string {
+function bookingsBody(plan: TripPayload, tripId: string, day: Day): string {
   const cards = [
     ...(plan.bookings ?? []).filter((b) => b.date === day.date).map((b) => cardOfBooking(plan, b)),
     // El día de salida de un hotel también cuenta: hay que dejar la habitación.
-    ...plan.stays.filter((st) => st.from <= day.date && day.date <= st.to).map((st) => cardOfStay(plan, st)),
+    ...plan.stays
+      .filter((st) => st.from <= day.date && day.date <= st.to)
+      .map((st) => cardOfStay(plan, tripId, st)),
   ];
   return cards.length ? cards.map(bookingCard).join('') : '<p class="empty">No bookings for this day.</p>';
 }
@@ -336,131 +669,70 @@ export function bookingsScreen(state: AppState): string {
 
   const cards = [
     ...(plan.bookings ?? []).map((b) => cardOfBooking(plan, b)),
-    ...plan.stays.map((st) => cardOfStay(plan, st)),
+    ...plan.stays.map((st) => cardOfStay(plan, route.tripId, st)),
   ].sort((x, y) => x.date.localeCompare(y.date));
 
-  return `<div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">‹ ${esc(
+  return `<div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">${ICONS.back} ${esc(
     pick(plan.title, plan.primaryLanguage) ?? 'Trip',
   )}</a></div>
     <h1>Bookings</h1>
     ${cards.length ? cards.map(bookingCard).join('') : '<p class="empty">No bookings yet.</p>'}`;
 }
 
-const NOT_FOUND = `<p class="empty">Day not found.</p>`;
-
-/** Las flechas de anterior y siguiente. Hacen lo mismo que deslizar el dedo. */
-function pager(plan: TripPayload, route: Route): string {
-  const { prev, next } = neighbours(plan, route);
-  const arrow = (to: Route | null, glyph: string, label: string) =>
-    to
-      ? `<button class="chip" data-swap="${esc(routeHash(to))}" aria-label="${label}">${glyph}</button>`
-      : `<span class="chip off" aria-hidden="true">${glyph}</span>`;
-  return arrow(prev, '‹', 'Previous') + arrow(next, '›', 'Next');
-}
-
-type Stop = Schedule['stops'][number];
-
-const nowLine = (now: number) => `<li class="nowline">Now · ${esc(formatClock(now))}</li>`;
-
-function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: number | null): string {
-  const w = stop.waypoint;
-  const place = plan.places[w.place];
-  const lang = plan.primaryLanguage;
-
-  const past = now !== null && stop.leave <= now;
-  const current = now !== null && stop.arrive <= now && now < stop.leave;
-  const flagged = (w.notes ?? []).some((n) => n.type === 'warn') || closedOnArrival(place, day, stop);
-
-  const sub = w.anchor
-    ? withTime(pick(w.anchor.label, lang) ?? w.anchor.type, w.anchor.time)
-    : w.duration >= 15
-      ? `until ${formatClock(stop.leave)}`
-      : '';
-
-  return `<li><button class="dayrow ${past ? 'past' : ''} ${current ? 'today' : ''}" data-go="${esc(
-    routeHash({ name: 'stop', tripId, dayId: day.id, waypointId: w.id }),
-  )}">
-    <b>${esc(formatClock(stop.arrive))}</b>
-    <span class="grow">${esc(place?.name ?? w.place)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
-    ${flagged ? '<span class="flag" aria-label="Has a warning">!</span>' : ''}
-    <span class="go">›</span>
-  </button></li>`;
-}
-
-const closedOnArrival = (place: Place | undefined, day: Day, stop: Stop): boolean =>
-  !!place && isOpenAt(place.hours, day.date, stop.arrive).state === 'closed';
-
-/** Muchas etiquetas ya dicen la hora; repetirla detrás sólo mete ruido. */
-const withTime = (label: string, time: string) => (label.includes(time) ? label : `${label} · ${time}`);
+/* ── Hotel ───────────────────────────────────────────────────────────── */
 
 /**
- * El plazo que manda. Sólo cuentan los que se pueden perder: la hora de
- * entrada a un hotel no es uno de ellos.
- *
- * Un día `transit` es un reloj (§4.5), así que el plazo va en grande y con
- * cuenta atrás. En los demás días es una franja discreta.
+ * La página del hotel: la foto, la dirección en el idioma local en grande
+ * (es lo que se enseña al taxista), el mapa y el teléfono, y los datos de la
+ * estancia.
  */
-function deadlinePanel(plan: TripPayload, day: Day, schedule: Schedule, now: number | null): string {
+export function hotelScreen(state: AppState): string {
+  const plan = state.plan;
+  const route = state.route;
+  if (!plan || route.name !== 'hotel') return NOT_FOUND;
+  const stay = plan.stays.find((st) => st.id === route.stayId);
+  if (!stay) return `<p class="empty">Stay not found.</p>`;
   const lang = plan.primaryLanguage;
-  const deadlines = schedule.stops.filter(
-    (s) => s.waypoint.anchor && s.waypoint.anchor.type !== 'opening',
-  );
-  if (!deadlines.length) return '';
+  const place = stay.place ? plan.places[stay.place] : undefined;
+  const todayIso = today(state.clock);
+  const nights = daysBetween(stay.from, stay.to);
+  const tonight = stay.from <= todayIso && todayIso < stay.to ? daysBetween(stay.from, todayIso) + 1 : 0;
 
-  const label = (s: Stop) =>
-    pick(s.waypoint.anchor!.label, lang) ?? plan.places[s.waypoint.place]?.name ?? s.waypoint.place;
-  const next = now === null ? deadlines[0] : deadlines.find((s) => parseAnchor(s) > now);
+  const photo = firstPhoto(place);
+  const hero = photo ? heroFigure(photo, lang) : '';
+  const local = [place?.nameLocal, place?.addressLocal].filter((s): s is string => !!s);
+  const taxi = local.length
+    ? `<div class="taxi"><p class="eyebrow">Show this to the taxi driver</p>${local
+        .map((l) => `<p class="thai">${esc(l)}</p>`)
+        .join('')}</div>`
+    : '';
+  const phone = place?.contact?.phone;
+  const maps = place ? mapsUrl(place) : null;
+  const buttons = [
+    maps ? `<a class="btn ghost" href="${esc(maps)}" target="_blank" rel="noopener">${ICONS.pin} Google Maps</a>` : '',
+    phone ? `<a class="btn ghost" href="tel:${esc(phone)}">${ICONS.phone} ${esc(phone)}</a>` : '',
+  ].join('');
+  const notes = [pick(stay.notes, lang), pick(place?.deep, lang)].filter((s): s is string => !!s);
+  const facts = (place?.facts ?? []).map((f) => `<li>${esc(pick(f.text, lang) ?? '')}</li>`).join('');
 
-  if (day.type !== 'transit') {
-    if (!next) return '';
-    const at = parseAnchor(next);
-    const left = now === null ? '' : ` · ${formatDuration(at - now)} left`;
-    return `<div class="alert amber"><p>${esc(withTime(label(next), next.waypoint.anchor!.time))}${esc(left)}</p></div>`;
-  }
-
-  const big = (text: string) =>
-    `<h1 style="font-size:3rem;font-variant-numeric:tabular-nums;margin:.2rem 0">${esc(text)}</h1>`;
-
-  if (!next) {
-    return `<div class="panel">
-      <p class="meta">${esc(label(deadlines[deadlines.length - 1]))}</p>
-      <p class="verdict ok">No deadlines left today.</p>
-    </div>`;
-  }
-
-  // En grande va siempre la hora del plazo: la de salida del vuelo, no la del
-  // cierre de facturación. Debajo, a qué hora hay que estar allí y, el día en
-  // cuestión, cuánto falta.
-  const at = parseAnchor(next);
-  const place = plan.places[next.waypoint.place]?.name ?? next.waypoint.place;
-  const beThere =
-    next.waypoint.anchor!.type === 'departure' && next.arrive < at
-      ? `Be at ${place} by ${formatClock(next.arrive)}`
-      : '';
-
-  if (now === null) {
-    return `<div class="panel">
-      <p class="meta">${esc(label(next))}</p>
-      ${big(next.waypoint.anchor!.time)}
-      <p class="verdict ok">${esc(beThere || `The plan starts at ${day.startTime}`)}</p>
-    </div>`;
-  }
-
-  const left = at - now;
-  const urgent = left <= 30;
-  return `<div class="panel">
-    <p class="meta">${esc(label(next))}</p>
-    ${big(next.waypoint.anchor!.time)}
-    <p class="verdict ${urgent ? 'bad' : 'ok'}">${esc(
-      [`${formatDuration(left)} to go`, beThere].filter(Boolean).join(' · '),
-    )}</p>
+  return `<div class="screen place" ${areaStyle(areaColor(plan, stay.area))}>
+    <div class="bar"><button class="back" data-act="back">${ICONS.back} Back</button><span class="eyebrow a">Hotel${
+      stay.area ? ` · ${esc(stay.area)}` : ''
+    }</span></div>
+    ${hero}
+    <h1>${esc(stay.name)}</h1>
+    ${place?.address ? `<p class="meta">${esc(place.address)}</p>` : ''}
+    ${taxi}
+    ${buttons ? `<div class="btns">${buttons}</div>` : ''}
+    <dl class="facts">
+      <dt>Stay</dt><dd>${esc(niceDate(stay.from))} → ${esc(niceDate(stay.to))} · ${nights} night${nights === 1 ? '' : 's'}</dd>
+      ${tonight ? `<dt>Tonight</dt><dd>Night ${tonight} of ${nights}</dd>` : ''}
+      ${stay.confirmation ? `<dt>Confirmation</dt><dd>${esc(stay.confirmation)}</dd>` : ''}
+    </dl>
+    ${notes.map((n) => `<p class="lead">${esc(n)}</p>`).join('')}
+    ${facts ? `<details class="panel"><summary>Good to know</summary><ul>${facts}</ul></details>` : ''}
   </div>`;
 }
-
-const parseAnchor = (s: { waypoint: { anchor?: { time: string } | null } }): number => {
-  const t = s.waypoint.anchor?.time ?? '00:00';
-  return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-};
 
 /* ── Parada y sitio ──────────────────────────────────────────────────── */
 
@@ -476,9 +748,10 @@ export function stopScreen(state: AppState): string {
   const lang = plan.primaryLanguage;
   const w = stop.waypoint;
   const place = plan.places[w.place];
+  const stay = plan.stays.find((st) => st.id === day.stay);
   const back = `<div class="bar"><a class="back grow" href="${esc(
-    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'plan' }),
-  )}">‹ ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
+    routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'timeline' }),
+  )}">${ICONS.back} ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
   if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
 
   const when =
@@ -493,12 +766,12 @@ export function stopScreen(state: AppState): string {
       )}</p>`
     : '';
 
-  const verdict = isOpenAt(place.hours, day.date, stop.arrive);
+  const open = isOpenAt(place.hours, day.date, stop.arrive);
   let conflict = '';
-  if (verdict.state === 'closed') {
-    const windows = verdict.windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed all day';
+  if (open.state === 'closed') {
+    const windows = open.windows.map((r) => `${r[0]}–${r[1]}`).join(', ') || 'closed all day';
     conflict = `<p class="conflict">${
-      whyClosed(verdict.windows, stop.arrive) === 'too-early'
+      whyClosed(open.windows, stop.arrive) === 'too-early'
         ? `You arrive at ${esc(formatClock(stop.arrive))} and it does not open until ${esc(windows)}`
         : `You arrive at ${esc(formatClock(stop.arrive))} and it closes ${esc(windows)}`
     }</p>`;
@@ -507,21 +780,15 @@ export function stopScreen(state: AppState): string {
   const choices = (w.choices ?? [])
     .map((id) => plan.places[id])
     .filter((pl): pl is Place => !!pl)
-    .map(
-      (pl) => `<li><button class="dayrow" data-go="${esc(
-        routeHash({ name: 'place', tripId: route.tripId, dayId: day.id, placeId: pl.id }),
-      )}"><span class="grow">${esc(pl.name)}${
-        pl.address ? `<span class="sub">${esc(pl.address)}</span>` : ''
-      }</span><span class="go">›</span></button></li>`,
-    )
+    .map((pl) => spot(plan, route.tripId, day, pl, pick(pl.deep, lang) ?? ''))
     .join('');
 
-  return `${back}
-    ${placeDetail(place, day, lang, {
+  return `<div class="screen place" ${areaStyle(areaColor(plan, stay?.area))}>${back}
+    ${placeDetail(place, day, lang, stay?.area, {
       under: `<p class="meta">${esc(when)}${esc(travel)}</p>${anchor}${conflict}`,
       notes: w.notes ?? [],
-      after: choices ? `<h3 class="group">Options</h3><ul class="days">${choices}</ul>` : '',
-    })}`;
+      after: choices ? `<div class="section options"><h2>Pick by mood</h2></div><ul class="spots">${choices}</ul>` : '',
+    })}</div>`;
 }
 
 /** Un sitio de la zona que no está (o no sólo) en el plan de ese día. */
@@ -532,32 +799,40 @@ export function placeScreen(state: AppState): string {
   const day = plan.days.find((d) => d.id === route.dayId);
   const place = plan.places[route.placeId];
   if (!day || !place) return NOT_FOUND;
+  const stay = plan.stays.find((st) => st.id === day.stay);
 
   // Se vuelve con el «atrás» del navegador: a un sitio se llega desde la
-  // pestaña de la zona o desde las opciones de una parada.
-  return `<div class="bar"><button class="back" data-act="back">‹ Back</button></div>
-    ${placeDetail(place, day, plan.primaryLanguage, { under: '', notes: [], after: '' })}`;
+  // pestaña de sitios o desde las opciones de una parada.
+  return `<div class="screen place" ${areaStyle(areaColor(plan, stay?.area))}>
+    <div class="bar"><button class="back" data-act="back">${ICONS.back} Back</button><span class="eyebrow a">${esc(
+      [label(place.category), place.area].filter(Boolean).join(' · '),
+    )}</span></div>
+    ${placeDetail(place, day, plan.primaryLanguage, stay?.area, { under: '', notes: [], after: '' })}</div>`;
 }
 
-/** Lo común a parada y sitio: foto, avisos, descripción, datos y letra pequeña plegada. */
+function heroFigure(photo: Photo, lang: string): string {
+  const caption = pick(photo.caption, lang);
+  return `<figure class="hero"><img src="${esc(photo.src)}" alt="">${
+    caption || photo.credit
+      ? `<figcaption>${esc(caption ?? '')}${photo.credit ? `<span class="credit">${esc(photo.credit)}</span>` : ''}</figcaption>`
+      : ''
+  }</figure>`;
+}
+
+/**
+ * Lo común a parada y sitio: la foto de portada, la descripción, los datos, la
+ * lectura larga con las demás fotos repartidas entre sus secciones, y la letra
+ * pequeña plegada.
+ */
 function placeDetail(
   place: Place,
   day: Day,
   lang: string,
+  area: string | null | undefined,
   extra: { under: string; notes: Note[]; after: string },
 ): string {
-  // Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red.
-  const shots = [place.photo, ...(place.gallery ?? [])].filter(
-    (p): p is { src: string; credit?: string | null } => !!p?.src.startsWith('data:image/'),
-  );
-  const figures = shots.map(
-    (p, i) =>
-      `<figure class="photo"><img src="${esc(p.src)}" alt=""${i ? ' loading="lazy"' : ''}>${
-        p.credit ? `<figcaption>${esc(shots.length > 1 ? `${i + 1}/${shots.length} · ${p.credit}` : p.credit)}</figcaption>` : ''
-      }</figure>`,
-  );
-  // Varias fotos: una tira que se desliza con el dedo, sin botones ni código.
-  const photo = figures.length > 1 ? `<div class="photos">${figures.join('')}</div>` : (figures[0] ?? '');
+  const photos = photosOf(place);
+  const hero = photos[0] ? heroFigure(photos[0], lang) : '';
 
   const warnings = extra.notes
     .filter((n) => n.type === 'warn')
@@ -566,6 +841,24 @@ function placeDetail(
 
   const about = pick(place.deep, lang);
   const story = pick(place.story, lang);
+
+  // Las fotos que sobran se reparten entre las secciones del texto, con su pie.
+  const figure = (p: Photo) => {
+    const caption = pick(p.caption, lang);
+    return `<figure><img src="${esc(p.src)}" alt="" loading="lazy"><figcaption>${esc(caption ?? '')}${
+      p.credit ? `<span class="credit">${esc(p.credit)}</span>` : ''
+    }</figcaption></figure>`;
+  };
+  let article = '';
+  if (story) {
+    const rest = photos.slice(1);
+    const sections = storySections(story).map((s, i) => s + (rest[i] ? figure(rest[i]) : ''));
+    // Si hay más fotos que secciones, las que quedan van al final.
+    const tail = rest.slice(sections.length).map(figure).join('');
+    article = `<article class="story"><p class="meta">${readingMinutes(story)} min read</p>${sections.join('')}${tail}</article>`;
+  } else if (photos.length > 1) {
+    article = `<article class="story">${photos.slice(1).map(figure).join('')}</article>`;
+  }
 
   const fineprint = [
     ...extra.notes.filter((n) => n.type !== 'warn').map((n) => `<li>${esc(pick(n.text, lang) ?? '')}</li>`),
@@ -581,25 +874,22 @@ function placeDetail(
     ),
   ];
 
-  return `${photo}
+  return `${hero}
     <h1>${esc(place.name)}</h1>
-    ${place.nameLocal && place.nameLocal !== place.name ? `<p class="lead">${esc(place.nameLocal)}</p>` : ''}
+    ${place.nameLocal && place.nameLocal !== place.name ? `<p class="meta">${esc(place.nameLocal)}</p>` : ''}
     ${extra.under}
     ${warnings}
     ${about ? `<p class="lead">${esc(about)}</p>` : ''}
     ${extra.after}
     ${placeFacts(place, day, lang)}
     ${placeLinks(place, lang)}
-    ${
-      story
-        ? `<article class="story"><p class="meta">${readingMinutes(story)} min read</p>${storyHtml(story)}</article>`
-        : ''
-    }
+    ${article}
     ${
       fineprint.length
         ? `<details class="panel"><summary>Good to know · ${fineprint.length}</summary><ul>${fineprint.join('')}</ul></details>`
         : ''
-    }`;
+    }
+    ${place.links?.guide ? `<p class="meta">Rough Guide: ${esc(place.links.guide)}</p>` : ''}`;
 }
 
 /**
@@ -622,22 +912,20 @@ function mapsUrl(place: Place): string | null {
 /**
  * Los enlaces de fuera: mapa, Wikipedia y web oficial. Todos necesitan red; el
  * artículo de Wikipedia se puede guardar en su app para leerlo sin conexión.
- * La referencia a la guía en papel no es un enlace, sólo dónde buscar.
  */
 function placeLinks(place: Place, lang: string): string {
   const https = (u: string | null | undefined): u is string => !!u && /^https:\/\//.test(u);
-  const btn = (url: string, label: string) =>
-    `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">${label}</a>`;
+  const btn = (url: string, icon: string, text: string) =>
+    `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">${icon} ${text}</a>`;
   const maps = mapsUrl(place);
   const wiki = pick(place.links?.wikipedia, lang);
   const site = place.links?.official ?? place.contact?.url;
   const buttons = [
-    https(maps) ? btn(maps, 'Open in Google Maps') : '',
-    https(wiki) ? btn(wiki, 'Read on Wikipedia') : '',
-    https(site) ? btn(site, 'Website') : '',
+    https(maps) ? btn(maps, ICONS.pin, 'Google Maps') : '',
+    https(wiki) ? btn(wiki, ICONS.ext, 'Wikipedia') : '',
+    https(site) ? btn(site, ICONS.ext, 'Website') : '',
   ].join('');
-  const guide = place.links?.guide ? `<p class="meta">Rough Guide: ${esc(place.links.guide)}</p>` : '';
-  return `${buttons ? `<p>${buttons}</p>` : ''}${guide}`;
+  return buttons ? `<div class="btns">${buttons}</div>` : '';
 }
 
 /** Los datos de consulta rápida. Una fila sólo sale si hay algo que decir. */
@@ -668,7 +956,7 @@ function placeFacts(place: Place, day: Day, lang: string): string {
   if (phone) rows.push(`<dt>Phone</dt><dd><a href="tel:${esc(phone)}">${esc(phone)}</a></dd>`);
 
   if (!rows.length && !costNote) return '';
-  return `<div class="panel"><dl>${rows.join('')}</dl>${costNote ? `<p class="meta">${esc(costNote)}</p>` : ''}</div>`;
+  return `<dl class="facts">${rows.join('')}${costNote ? `<dt></dt><dd class="meta">${esc(costNote)}</dd>` : ''}</dl>`;
 }
 
 /* ── Ajustes y spike (§8.4, §12.3) ───────────────────────────────────── */
@@ -692,13 +980,13 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
   const v = verdict(spike.info, s.persisted, spike.ranges, spike.startedAt);
   const tone = v.startsWith('PASSED') ? 'ok' : v.includes('refused') || v.includes('fails') ? 'bad' : '';
 
-  return `<div class="bar"><a class="back" href="#/">‹ Trips</a><h1>Settings</h1></div>
+  return `<div class="bar"><a class="back" href="#/">${ICONS.back} Trips</a><h1>Settings</h1></div>
 
   <div class="panel">
     <h3>Text size</h3>
     <div class="acts">${TEXT_SIZES.map(
-      ([size, label]) =>
-        `<button data-act="text-size" data-size="${size}" aria-pressed="${state.textSize === size}">${label}</button>`,
+      ([size, text]) =>
+        `<button data-act="text-size" data-size="${size}" aria-pressed="${state.textSize === size}">${text}</button>`,
     ).join('')}</div>
   </div>
 
@@ -724,9 +1012,9 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
     ${
       spike.busy
         ? `<p class="meta">${esc(spike.busy)}</p>`
-        : `<button class="btn" data-act="spike-write">Write 150 MB</button>
+        : `<div class="btns"><button class="btn" data-act="spike-write">Write 150 MB</button>
            <button class="btn ghost" data-act="spike-verify">Check reading</button>
-           ${spike.info.exists ? '<button class="btn ghost" data-act="spike-delete">Delete</button>' : ''}`
+           ${spike.info.exists ? '<button class="btn ghost" data-act="spike-delete">Delete</button>' : ''}</div>`
     }
   </div>
 
@@ -754,9 +1042,4 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
     <h3>Data</h3>
     <button class="btn ghost" data-act="seed">Reload the sample trip</button>
   </div>`;
-}
-
-function shortDate(iso: string): string {
-  const [, m, d] = iso.split('-');
-  return `${d}/${m}`;
 }

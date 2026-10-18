@@ -16,13 +16,14 @@ export type Route =
   | { name: 'stop'; tripId: string; dayId: string; waypointId: string }
   | { name: 'place'; tripId: string; dayId: string; placeId: string }
   | { name: 'bookings'; tripId: string }
+  | { name: 'hotel'; tripId: string; stayId: string }
   | { name: 'trip'; tripId: string }
   | { name: 'settings' };
 
 export type NearbyFilter = 'all' | 'see' | 'eat';
 
-/** Las tres vistas de un día. `plan` es la que sale por defecto. */
-export type DayTab = 'plan' | 'nearby' | 'bookings';
+/** Las tres vistas de un día. `timeline` es la que sale por defecto. */
+export type DayTab = 'timeline' | 'places' | 'bookings';
 
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -36,10 +37,13 @@ export function parseRoute(hash: string): Route {
       if (parts[4] === 'place' && parts[5]) {
         return { name: 'place', tripId, dayId: parts[3], placeId: decodeURIComponent(parts[5]) };
       }
-      const tab: DayTab = parts[4] === 'nearby' || parts[4] === 'bookings' ? parts[4] : 'plan';
+      const tab: DayTab = parts[4] === 'places' || parts[4] === 'bookings' ? parts[4] : 'timeline';
       return { name: 'day', tripId, dayId: parts[3], tab };
     }
     if (parts[2] === 'bookings') return { name: 'bookings', tripId: decodeURIComponent(parts[1]) };
+    if (parts[2] === 'stay' && parts[3]) {
+      return { name: 'hotel', tripId: decodeURIComponent(parts[1]), stayId: decodeURIComponent(parts[3]) };
+    }
     return { name: 'trip', tripId: decodeURIComponent(parts[1]) };
   }
   return { name: 'library' };
@@ -55,7 +59,7 @@ export function routeHash(route: Route): string {
       return `#/trip/${encodeURIComponent(route.tripId)}`;
     case 'day':
       return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}${
-        route.tab === 'plan' ? '' : `/${route.tab}`
+        route.tab === 'timeline' ? '' : `/${route.tab}`
       }`;
     case 'stop':
       return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/stop/${encodeURIComponent(route.waypointId)}`;
@@ -63,6 +67,8 @@ export function routeHash(route: Route): string {
       return `#/trip/${encodeURIComponent(route.tripId)}/day/${route.dayId}/place/${encodeURIComponent(route.placeId)}`;
     case 'bookings':
       return `#/trip/${encodeURIComponent(route.tripId)}/bookings`;
+    case 'hotel':
+      return `#/trip/${encodeURIComponent(route.tripId)}/stay/${encodeURIComponent(route.stayId)}`;
   }
 }
 
@@ -114,8 +120,8 @@ export interface AppState {
   clock: SimulatedClock;
   /** Qué grupo de sitios enseña la pestaña de la zona. Se conserva al cambiar de día. */
   nearby: NearbyFilter;
-  /** Orden de esa lista, y la posición leída al pedir «los más cercanos». */
-  nearbySort: 'az' | 'near';
+  /** Desde dónde se mide esa lista: el hotel, o la posición leída al pedir «desde aquí». */
+  nearbySort: 'hotel' | 'me';
   position: Coords | null;
   /** Tamaño del texto, en % del normal. Todo el estilo va en `rem`. */
   textSize: number;

@@ -24,7 +24,7 @@ describe('rutas', () => {
       { name: 'library' },
       { name: 'settings' },
       { name: 'trip', tripId },
-      { name: 'day', tripId, dayId: first.id, tab: 'plan' },
+      { name: 'day', tripId, dayId: first.id, tab: 'timeline' },
       { name: 'day', tripId, dayId: first.id, tab: 'bookings' },
       { name: 'stop', tripId, dayId: first.id, waypointId: first.waypoints[0].id },
       { name: 'place', tripId, dayId: first.id, placeId: first.waypoints[0].place },
@@ -36,9 +36,9 @@ describe('rutas', () => {
 
 describe('vecinas', () => {
   test('un día tiene a los lados el día anterior y el siguiente', () => {
-    const { prev, next } = neighbours(plan, { name: 'day', tripId, dayId: first.id, tab: 'plan' });
+    const { prev, next } = neighbours(plan, { name: 'day', tripId, dayId: first.id, tab: 'timeline' });
     assert.equal(prev, null, 'el primer día no tiene anterior');
-    assert.deepEqual(next, { name: 'day', tripId, dayId: second.id, tab: 'plan' });
+    assert.deepEqual(next, { name: 'day', tripId, dayId: second.id, tab: 'timeline' });
   });
 
   test('al pasar de día se conserva la pestaña', () => {

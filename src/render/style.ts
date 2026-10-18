@@ -154,6 +154,28 @@ details[open]>.stay .open{transform:rotate(90deg)}
 .leg .chip{color:var(--muted);font-weight:500}
 .leg svg{width:14px;height:14px}
 
+/* mapa del viaje */
+.tripmap{margin:1rem 0 0;background:#DCEBF0;border-radius:1.1rem;overflow:hidden}
+.tripmap svg{display:block;width:100%;height:auto}
+
+/* mapa del día */
+.daymap{margin:0 0 1.25rem}
+.daymap .frame{position:relative;border-radius:1rem;overflow:hidden;border:1px solid var(--line);background:#F4EFE6}
+.daymap .frame img{width:100%;height:auto;display:block}
+.daymap .frame svg{position:absolute;inset:0;width:100%;height:100%}
+.daymap figcaption{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
+.pin circle{fill:var(--a);stroke:#fff;stroke-width:3}
+.pin text{fill:#fff;font-weight:700;text-anchor:middle;dominant-baseline:central;font-family:var(--ui)}
+.here{fill:#1E6FD9;stroke:#fff;stroke-width:4}
+.here-halo{fill:#1E6FD9;opacity:.18}
+.mapfull{position:fixed;inset:0;z-index:20;background:#F4EFE6;display:flex;flex-direction:column}
+.mapfull .scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+.mapfull .frame{position:relative;width:260vw}
+.mapfull .frame img{width:100%;display:block}
+.mapfull .frame svg{position:absolute;inset:0;width:100%;height:100%}
+.mapfull .barf{display:flex;gap:.5rem;justify-content:space-between;align-items:center;padding:calc(.5rem + var(--safe-top)) 1rem .5rem;background:var(--bg);border-bottom:1px solid var(--line)}
+.mapfull .foot{padding:.5rem 1rem calc(.6rem + var(--safe-bottom));background:var(--bg);border-top:1px solid var(--line);display:flex;gap:.5rem}
+
 /* línea de tiempo del día */
 .tl{list-style:none;margin:0;padding:0;position:relative}
 .tl::before{content:"";position:absolute;left:calc(3.6rem + 21px);top:14px;bottom:14px;width:2px;background:var(--line)}

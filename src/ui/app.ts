@@ -59,6 +59,7 @@ async function boot(): Promise<void> {
     nearby: 'all',
     nearbySort: 'hotel',
     position: null,
+    mapOpen: false,
     flash: null,
     updateReady: false,
   };
@@ -165,6 +166,7 @@ async function navigate(): Promise<void> {
   const changed = location.hash !== shownHash;
   shownHash = location.hash;
   state.route = parseRoute(location.hash);
+  if (changed) state.mapOpen = false;
   state.plans = await allPlans(db);
   state.storage = await storageStatus();
 
@@ -350,6 +352,26 @@ async function act(action: string, el: HTMLElement): Promise<void> {
     case 'back':
       history.back();
       break;
+
+    /* Mapa del día */
+    case 'map-open':
+      state.mapOpen = true;
+      render();
+      break;
+
+    case 'map-close':
+      state.mapOpen = false;
+      render();
+      break;
+
+    case 'locate': {
+      // Una lectura por toque (§8.3). El punto se queda donde se leyó.
+      const position = await currentPosition();
+      state.position = position;
+      state.flash = position ? null : 'Location not available. Check that the app is allowed to use it.';
+      render();
+      break;
+    }
 
     /* Ajustes */
     case 'persist':

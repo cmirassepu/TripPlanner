@@ -169,6 +169,7 @@ export interface Day {
   title?: Localized | null;
   timezone?: string | null;
   stay?: string | null;
+  map?: DayMap | null;
   /** "HH:MM". La única hora absoluta del plan (§2.2). */
   startTime: string;
   intro?: Localized | null;
@@ -227,6 +228,30 @@ export interface TripPayload {
   days: Day[];
   /** Foto de portada del viaje. Si falta, se usa la del primer sitio con foto. */
   cover?: Photo | null;
+  /** El contorno del país para el mapa del viaje. Lo escribe `scripts/maps/trip-map.ts`. */
+  map?: TripMap | null;
+}
+
+/**
+ * Un mapa dibujado de antemano. `bounds` son [sur, oeste, norte, este] en
+ * grados; la app coloca encima lo que tenga coordenadas con la misma
+ * proyección (lineal, anchura corregida por el coseno de la latitud).
+ */
+export interface MapBounds {
+  bounds: [number, number, number, number];
+  width: number;
+  height: number;
+}
+
+export interface TripMap extends MapBounds {
+  /** Trazos SVG ya proyectados: el país y, en claro, los vecinos. */
+  land: string;
+  neighbours: string;
+}
+
+/** El mapa a pie de un día: calles, agua y ruta como SVG (`data:image/svg+xml`). Lo escribe `scripts/maps/walking-map.ts`. */
+export interface DayMap extends MapBounds {
+  src: string;
 }
 
 /* ── Sobre común (§4.1) ──────────────────────────────────────────────── */

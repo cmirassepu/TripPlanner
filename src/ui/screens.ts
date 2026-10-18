@@ -9,7 +9,7 @@
  * hotel, con la dirección en el idioma local para enseñarla al taxista.
  */
 
-import type { TripPayload, Day, Place, Stay, Booking, Note, Photo } from '../model/types.ts';
+import type { TripPayload, Day, Place, Stay, Booking, Note, Photo, Coords, MapBounds } from '../model/types.ts';
 import type { AppState } from './state.ts';
 import { routeHash, today, nowMinutes, neighbours, type Route, type DayTab, type NearbyFilter } from './state.ts';
 import { computeSchedule, type Schedule } from '../core/schedule.ts';
@@ -111,6 +111,143 @@ function areaPhoto(plan: TripPayload, area: string | null | undefined): Photo | 
     .filter((p) => area && p.area === area && !NOT_SIGHTS.has(p.category ?? ''))
     .map(firstPhoto)
     .find(Boolean);
+}
+
+/* ── Mapas ───────────────────────────────────────────────────────────── */
+
+/** La misma proyección que usan los scripts que dibujan los mapas. */
+function projector(m: MapBounds): (c: Coords) => [number, number] {
+  const [s, w, n, e] = m.bounds;
+  return ([lat, lon]) => [((lon - w) / (e - w)) * m.width, ((n - lat) / (n - s)) * m.height];
+}
+
+const inside = (m: MapBounds, [lat, lon]: Coords): boolean =>
+  lat >= m.bounds[0] && lat <= m.bounds[2] && lon >= m.bounds[1] && lon <= m.bounds[3];
+
+/** Dónde está una estancia: su hotel o, si no tiene coordenadas, el centro de los sitios de su zona. */
+function stayCoords(plan: TripPayload, stay: Stay): Coords | null {
+  const own = stay.place ? plan.places[stay.place]?.coords : null;
+  if (own) return own;
+  const around = Object.values(plan.places)
+    .filter((p) => stay.area && p.area === stay.area && p.coords)
+    .map((p) => p.coords as Coords);
+  if (!around.length) return null;
+  return [around.reduce((a, c) => a + c[0], 0) / around.length, around.reduce((a, c) => a + c[1], 0) / around.length];
+}
+
+/**
+ * El mapa del viaje: el país dibujado por el script, y encima las estancias
+ * como fotos redondas numeradas unidas por la ruta. Cada estancia lleva el
+ * color de su zona.
+ */
+function tripMap(plan: TripPayload, tripId: string): string {
+  const m = plan.map;
+  if (!m) return '';
+  const at = projector(m);
+  const stops = plan.stays
+    .map((st, i) => ({ st, i, c: stayCoords(plan, st) }))
+    .filter((x): x is { st: Stay; i: number; c: Coords } => !!x.c);
+  if (!stops.length) return '';
+  const r = 46;
+  const route = stops.map(({ c }) => at(c).map((v) => v.toFixed(0)).join(',')).join(' ');
+  const marks = stops
+    .map(({ st, i, c }, k) => {
+      const [x, y] = at(c);
+      const color = areaColor(plan, st.area);
+      // Volver a un sitio (Bangkok al principio y al final): sólo el número, a la derecha del primero.
+      const repeat = stops.findIndex((o) => o.c[0] === c[0] && o.c[1] === c[1]) < k;
+      if (repeat) {
+        return `<g><circle cx="${(x + r * 0.75).toFixed(0)}" cy="${(y + r * 0.75).toFixed(0)}" r="20" fill="${esc(color)}" stroke="#fff" stroke-width="4"/>
+          <text x="${(x + r * 0.75).toFixed(0)}" y="${(y + r * 0.75).toFixed(0)}" fill="#fff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">${i + 1}</text></g>`;
+      }
+      const photo = areaPhoto(plan, st.area) ?? firstPhoto(st.place ? plan.places[st.place] : undefined);
+      const id = `clip${i}`;
+      return `<g>
+        <clipPath id="${id}"><circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r}"/></clipPath>
+        <circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r + 5}" fill="#fff"/>
+        ${
+          photo
+            ? `<image href="${esc(photo.src)}" x="${(x - r).toFixed(0)}" y="${(y - r).toFixed(0)}" width="${2 * r}" height="${2 * r}" clip-path="url(#${id})" preserveAspectRatio="xMidYMid slice"/>`
+            : `<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${r}" fill="${esc(color)}"/>`
+        }
+        <circle cx="${(x - r * 0.75).toFixed(0)}" cy="${(y + r * 0.75).toFixed(0)}" r="20" fill="${esc(color)}" stroke="#fff" stroke-width="4"/>
+        <text x="${(x - r * 0.75).toFixed(0)}" y="${(y + r * 0.75).toFixed(0)}" fill="#fff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">${i + 1}</text>
+      </g>`;
+    })
+    .join('');
+  return `<div class="tripmap"><svg viewBox="0 0 ${m.width} ${m.height}" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,system-ui,sans-serif">
+    <path d="${esc(m.neighbours)}" fill="#EEE9DF"/>
+    <path d="${esc(m.land)}" fill="#F7F2E8" stroke="#D9D0C0" stroke-width="2"/>
+    <polyline points="${route}" fill="none" stroke="#fff" stroke-width="10" stroke-linejoin="round" opacity=".8"/>
+    <polyline points="${route}" fill="none" stroke="#8A8376" stroke-width="4" stroke-dasharray="10 12" stroke-linejoin="round" stroke-linecap="round"/>
+    ${marks}
+  </svg></div>`;
+}
+
+/**
+ * Las paradas con coordenadas de un día, por orden. Es lo que se pinta encima
+ * del mapa a pie y lo que se manda a Google Maps.
+ */
+function dayPoints(plan: TripPayload, day: Day): { n: number; name: string; c: Coords }[] {
+  const out: { n: number; name: string; c: Coords }[] = [];
+  for (const w of day.waypoints) {
+    const p = plan.places[w.place];
+    if (!p?.coords) continue;
+    // El hotel al principio y al final es el mismo punto: un número basta.
+    if (out.length && out[out.length - 1].c === p.coords) continue;
+    out.push({ n: out.length + 1, name: p.name, c: p.coords });
+  }
+  return out;
+}
+
+/** Las chinchetas numeradas y, si se ha pedido, el punto de «estás aquí». */
+function mapOverlay(m: MapBounds, points: { n: number; c: Coords }[], here: Coords | null): string {
+  const at = projector(m);
+  const pins = points
+    .filter(({ c }) => inside(m, c))
+    .map(({ n, c }) => {
+      const [x, y] = at(c);
+      return `<g class="pin"><circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="17"/><text x="${x.toFixed(0)}" y="${y.toFixed(0)}" font-size="18">${n}</text></g>`;
+    })
+    .join('');
+  const dot =
+    here && inside(m, here)
+      ? (() => {
+          const [x, y] = at(here);
+          return `<circle class="here-halo" cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="40"/><circle class="here" cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="11"/>`;
+        })()
+      : '';
+  return `<svg viewBox="0 0 ${m.width} ${m.height}" xmlns="http://www.w3.org/2000/svg">${pins}${dot}</svg>`;
+}
+
+/** Google Maps con las paradas del día en orden, a pie. Necesita red, o la zona descargada en la app de Google. */
+function dayDirectionsUrl(points: { c: Coords }[]): string | null {
+  if (points.length < 2) return null;
+  const ll = (c: Coords) => `${c[0]},${c[1]}`;
+  const middle = points.slice(1, -1).slice(0, 9); // Google admite nueve puntos intermedios
+  return `https://www.google.com/maps/dir/?api=1&origin=${ll(points[0].c)}&destination=${ll(
+    points[points.length - 1].c,
+  )}${middle.length ? `&waypoints=${encodeURIComponent(middle.map((p) => ll(p.c)).join('|'))}` : ''}&travelmode=walking`;
+}
+
+/** El mapa a pie del día, pequeño, con sus botones; y a pantalla completa cuando se pide. */
+function dayMapFigure(state: AppState, plan: TripPayload, day: Day): string {
+  const m = day.map;
+  const points = dayPoints(plan, day);
+  const directions = dayDirectionsUrl(points);
+  const gmaps = directions
+    ? `<a class="btn ghost" href="${esc(directions)}" target="_blank" rel="noopener">${ICONS.ext} Day in Google Maps</a>`
+    : '';
+  if (!m?.src.startsWith('data:image/svg+xml')) return gmaps ? `<div class="btns">${gmaps}</div>` : '';
+
+  const here = state.position;
+  const frame = `<div class="frame"><img src="${esc(m.src)}" alt="Map of today's walk">${mapOverlay(m, points, here)}</div>`;
+  const locate = `<button class="btn ghost" data-act="locate">${ICONS.pin} Where am I</button>`;
+  const full = state.mapOpen
+    ? `<div class="mapfull"><div class="barf"><strong>${esc(pick(day.title, plan.primaryLanguage) ?? '')}</strong><button class="chip" data-act="map-close">Close</button></div>
+        <div class="scroll">${frame}</div><div class="foot">${locate}${gmaps}</div></div>`
+    : '';
+  return `<figure class="daymap">${frame}<figcaption><button class="btn ghost" data-act="map-open">${ICONS.view} Open map</button>${locate}${gmaps}</figcaption></figure>${full}`;
 }
 
 /* ── Fechas ──────────────────────────────────────────────────────────── */
@@ -252,6 +389,7 @@ export function tripScreen(state: AppState): string {
         <h1>${esc(pick(plan.title, lang) ?? tripId)}</h1>
         <p class="meta">${daysBetween(plan.startDate, plan.endDate)} nights · ${plan.stays.length} stays</p></div></div>
     ${todayCard}
+    ${tripMap(plan, tripId)}
     <div class="section"><h2>Where we stay</h2><a class="chip" href="${esc(routeHash({ name: 'bookings', tripId }))}">All bookings</a></div>
     <div class="stays">${stays}</div>`;
 }
@@ -335,6 +473,7 @@ function timelineBody(state: AppState, plan: TripPayload, tripId: string, day: D
   if (!nowShown && schedule.stops.length) rows.push(nowLine(now!));
 
   return `${intro ? `<p class="intro">${esc(intro)}</p>` : ''}
+    ${dayMapFigure(state, plan, day)}
     ${deadlinePanel(plan, day, schedule, now)}
     ${rows.length ? `<ul class="tl">${rows.join('')}</ul>` : '<p class="empty">Nothing planned yet.</p>'}`;
 }

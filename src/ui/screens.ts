@@ -268,6 +268,15 @@ function loadButton(): string {
 
 /* ── Pantalla del viaje ──────────────────────────────────────────────── */
 
+/**
+ * La estancia de un día: la que dice el día o, si no dice ninguna (el día de
+ * salida, un día de vuelo), la que cubre esa fecha. Así la pestaña de sitios
+ * sigue enseñando la zona el día que se deja el hotel.
+ */
+function stayOf(plan: TripPayload, day: Day): Stay | undefined {
+  return plan.stays.find((st) => st.id === day.stay) ?? plan.stays.find((st) => st.from <= day.date && day.date <= st.to);
+}
+
 /** Los días que se duermen en una estancia: por `day.stay`, o por fecha si el día no lo dice. */
 function daysOfStay(plan: TripPayload, stay: Stay): Day[] {
   return plan.days.filter((d) => (d.stay ? d.stay === stay.id : stay.from <= d.date && d.date < stay.to));
@@ -367,7 +376,7 @@ export function dayScreen(state: AppState): string {
   if (!day) return NOT_FOUND;
 
   const lang = plan.primaryLanguage;
-  const stay = plan.stays.find((st) => st.id === day.stay);
+  const stay = stayOf(plan, day);
   const tabs = DAY_TABS.map(
     ([tab, text]) =>
       `<button data-swap="${esc(routeHash({ ...route, tab }))}" aria-pressed="${route.tab === tab}">${text}</button>`,
@@ -432,7 +441,7 @@ const nowLine = (now: number) => `<li class="nowline">Now · ${esc(formatClock(n
 
 /** La estancia a la que pertenece un sitio de categoría `lodging`, para abrir su página. */
 function stayOfPlace(plan: TripPayload, day: Day, placeId: string): Stay | undefined {
-  return plan.stays.find((st) => st.place === placeId) ?? plan.stays.find((st) => st.id === day.stay);
+  return plan.stays.find((st) => st.place === placeId) ?? stayOf(plan, day);
 }
 
 function stopRow(plan: TripPayload, tripId: string, day: Day, stop: Stop, now: number | null): string {
@@ -622,7 +631,7 @@ function placesBody(state: AppState, plan: TripPayload, tripId: string, day: Day
   }
 
   // Lo demás de la zona, medido desde el hotel o, si se ha pedido, desde donde se está.
-  const stay = plan.stays.find((st) => st.id === day.stay);
+  const stay = stayOf(plan, day);
   const area = stay?.area;
   const hotel = stay?.place ? plan.places[stay.place]?.coords : null;
   const fromMe = state.nearbySort === 'me' && !!state.position;
@@ -657,7 +666,7 @@ function placesBody(state: AppState, plan: TripPayload, tripId: string, day: Day
       }</button>`
     : '';
 
-  return `${sights.length ? `<div class="section"><h2>Today</h2><span class="meta">${sights.length} places</span></div><ul class="cards">${sights.join('')}</ul>` : ''}
+  return `${sights.length ? `<div class="section"><h2>Today</h2><span class="meta">${sights.length} place${sights.length === 1 ? '' : 's'}</span></div><ul class="cards">${sights.join('')}</ul>` : ''}
     ${meals.length ? `<div class="section"><h2>Food &amp; snacks</h2><span class="meta">by mood</span></div><ul class="meals">${meals.join('')}</ul>` : ''}
     <div class="section"><h2>Also around here</h2><span class="meta">${esc(area ?? '')}</span></div>
     <div class="filters">${chips}<span class="grow"></span>${fromWhere}</div>
@@ -837,7 +846,7 @@ export function stopScreen(state: AppState): string {
   const lang = plan.primaryLanguage;
   const w = stop.waypoint;
   const place = plan.places[w.place];
-  const stay = plan.stays.find((st) => st.id === day.stay);
+  const stay = stayOf(plan, day);
   const back = `<div class="bar"><a class="back grow" href="${esc(
     routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'timeline' }),
   )}">${ICONS.back} ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
@@ -888,7 +897,7 @@ export function placeScreen(state: AppState): string {
   const day = plan.days.find((d) => d.id === route.dayId);
   const place = plan.places[route.placeId];
   if (!day || !place) return NOT_FOUND;
-  const stay = plan.stays.find((st) => st.id === day.stay);
+  const stay = stayOf(plan, day);
 
   // Se vuelve con el «atrás» del navegador: a un sitio se llega desde la
   // pestaña de sitios o desde las opciones de una parada.

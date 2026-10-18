@@ -547,11 +547,17 @@ function placeDetail(
   extra: { under: string; notes: Note[]; after: string },
 ): string {
   // Sólo `data:` de imagen: el archivo de viaje no debe poder cargar nada de la red.
-  const photo = place.photo?.src.startsWith('data:image/')
-    ? `<figure class="photo"><img src="${esc(place.photo.src)}" alt="">${
-        place.photo.credit ? `<figcaption>${esc(place.photo.credit)}</figcaption>` : ''
-      }</figure>`
-    : '';
+  const shots = [place.photo, ...(place.gallery ?? [])].filter(
+    (p): p is { src: string; credit?: string | null } => !!p?.src.startsWith('data:image/'),
+  );
+  const figures = shots.map(
+    (p, i) =>
+      `<figure class="photo"><img src="${esc(p.src)}" alt=""${i ? ' loading="lazy"' : ''}>${
+        p.credit ? `<figcaption>${esc(shots.length > 1 ? `${i + 1}/${shots.length} · ${p.credit}` : p.credit)}</figcaption>` : ''
+      }</figure>`,
+  );
+  // Varias fotos: una tira que se desliza con el dedo, sin botones ni código.
+  const photo = figures.length > 1 ? `<div class="photos">${figures.join('')}</div>` : (figures[0] ?? '');
 
   const warnings = extra.notes
     .filter((n) => n.type === 'warn')

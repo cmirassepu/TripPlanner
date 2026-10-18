@@ -119,6 +119,9 @@ button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:p
 .photo{margin:0 0 .9rem}
 .photo img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:.7rem;background:var(--card)}
 .photo figcaption{margin:.3rem 0 0;font-size:.68rem;color:var(--muted)}
+.photos{display:flex;gap:.5rem;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -1rem .9rem;padding:0 1rem;scroll-padding:0 1rem;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.photos .photo{flex:0 0 88%;margin:0;scroll-snap-align:center}
 
 .stop{transition:opacity .15s}
 .stop.done .when strong{color:var(--muted);text-decoration:line-through}

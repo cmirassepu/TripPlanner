@@ -90,6 +90,8 @@ export interface Place {
    * (autor y licencia), porque las fotos libres lo exigen.
    */
   photo?: { src: string; credit?: string | null } | null;
+  /** Más fotos, con las mismas reglas que `photo`. Salen detrás de ella, en una tira que se desliza. */
+  gallery?: { src: string; credit?: string | null }[];
   links?: {
     wikipedia?: Localized | null;
     official?: string | null;

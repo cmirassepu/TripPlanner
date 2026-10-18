@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 const [file, dayId, third] = process.argv.slice(2);
 const boundsArg = third && !third.startsWith('--') ? third : undefined;
@@ -342,14 +343,38 @@ ${layer(hops, 'stroke="#C65D21" stroke-width="4" stroke-dasharray="4 10"')}
 <text x="${W - 10}" y="${H - 10}" text-anchor="end" font-size="13" fill="#8A8376" font-family="-apple-system,system-ui,sans-serif">© OpenStreetMap contributors</text>
 </svg>`;
 
+// Se guarda como imagen de tamaño fijo (WebP a 2000 px de ancho): un SVG en el
+// teléfono se rasteriza de nuevo con cada zoom y se queda sin memoria. Para
+// pasar de SVG a imagen se usa el visor rápido de macOS y Pillow.
+const tmpSvg = join(tmpdir(), `${dayId}.svg`);
+writeFileSync(tmpSvg, svg);
+execFileSync('qlmanage', ['-t', '-s', '2000', '-o', tmpdir(), tmpSvg], { stdio: 'ignore' });
+const webp = execFileSync(
+  'python3',
+  [
+    '-c',
+    `import sys,io,base64
+from PIL import Image
+im=Image.open(sys.argv[1]).convert('RGB')
+# el visor rellena hasta un cuadrado: se recorta a la forma del mapa
+ratio=float(sys.argv[2]); im=im.crop((0,0,im.size[0],int(im.size[0]*ratio)))
+w=2000; im=im.resize((w,int(w*ratio)),Image.LANCZOS)
+b=io.BytesIO(); im.save(b,'WEBP',quality=72,method=6)
+sys.stdout.write('data:image/webp;base64,'+base64.b64encode(b.getvalue()).decode())`,
+    `${tmpSvg}.png`,
+    String(H / W),
+  ],
+  { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+);
+
 day.map = {
   bounds: [s, w, n, e].map((v) => Number(v.toFixed(5))),
   width: W,
   height: H,
-  src: 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'),
+  src: webp,
 };
 writeFileSync(file, JSON.stringify(trip, null, 2), 'utf8');
 if (process.argv.includes('--svg')) writeFileSync(`${dayId}.svg`, svg);
 console.log(
-  `${dayId}: ${W}×${H}, ${(svg.length / 1024).toFixed(0)} kB de SVG, ${labels.length} nombres, ${routed} tramos a pie de ${stops.length - 1}, ${hops.length} saltos`,
+  `${dayId}: ${W}×${H}, ${(webp.length / 1024).toFixed(0)} kB de imagen, ${labels.length} nombres, ${routed} tramos a pie de ${stops.length - 1}, ${hops.length} saltos`,
 );

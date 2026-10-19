@@ -92,7 +92,20 @@ p{margin:0}
 .glass{background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);transition:box-shadow .2s}
 .scrolled .glass{box-shadow:0 3px 14px rgba(30,28,24,.12)}
 .back{display:inline-flex;align-items:center;gap:.15rem;font-weight:700;color:var(--a-ink);min-height:40px;max-width:70%;padding:0 .9rem 0 .5rem;border:1px solid var(--line);border-radius:2rem;text-decoration:none;font-size:.9rem;white-space:nowrap}
-.back .lbl{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.back .lbl{overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:16rem;transition:max-width .2s}
+/* al bajar por un día, el botón de volver se queda en la flecha y deja sitio a la etiqueta del día */
+.where{flex:1;min-width:0;min-height:40px;padding:0 .6rem;border:1px solid var(--line);border-radius:2rem;display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.2;color:var(--ink);opacity:0;pointer-events:none;transition:opacity .2s,box-shadow .2s}
+.where span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.where .d{font-size:.64rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.where .a{font-size:.84rem;font-weight:700}
+.scrolled .where{opacity:1;pointer-events:auto}
+.scrolled .bar.day .back .lbl{max-width:0}
+.scrolled .bar.day .back{padding-right:.45rem}
+/* En un día o una parada, al bajar, los tres controles se funden en una sola
+   pastilla: así el texto de debajo no asoma entre ellos. */
+.bar.day{margin:0 -.4rem;padding:.5rem .4rem calc(.5rem - 2px);border:1px solid transparent;border-radius:2rem;transition:background-color .2s,border-color .2s,box-shadow .2s}
+.scrolled .bar.day{pointer-events:auto;background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-color:var(--line);box-shadow:0 3px 14px rgba(30,28,24,.12)}
+.scrolled .bar.day .back,.scrolled .bar.day .where,.scrolled .bar.day .chip{border-color:transparent;background:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
 .back svg{width:18px;height:18px;flex:none}
 .arrows{display:flex;gap:.4rem}
 .arrows .chip{width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center}
@@ -147,9 +160,10 @@ p{margin:0}
 .stays{list-style:none;margin:0;padding:0}
 .stay{display:grid;grid-template-columns:72px 1fr auto;gap:.9rem;align-items:center;padding:.6rem 0;cursor:pointer;list-style:none}
 .stay::-webkit-details-marker{display:none}
-.stay .pic{width:72px;height:72px;border-radius:1rem;overflow:hidden;background:var(--a-soft);position:relative}
-.stay .pic img{width:100%;height:100%;object-fit:cover}
-.stay .n{position:absolute;left:-4px;bottom:-4px;width:24px;height:24px;border-radius:50%;background:var(--a);color:#fff;font-size:.75rem;font-weight:700;display:grid;place-items:center;border:2px solid var(--bg)}
+/* El recorte redondo va en la foto, no en la caja: así el número asoma entero por la esquina. */
+.stay .pic{width:72px;height:72px;border-radius:1rem;background:var(--a-soft);position:relative}
+.stay .pic img{width:100%;height:100%;object-fit:cover;border-radius:1rem}
+.stay .n{position:absolute;left:-6px;bottom:-6px;width:24px;height:24px;border-radius:50%;background:var(--a);color:#fff;font-size:.75rem;font-weight:700;display:grid;place-items:center;border:2px solid var(--bg)}
 .stay h3{color:var(--a-ink)}
 .stay .open{width:28px;height:28px;display:grid;place-items:center;color:var(--muted);transition:transform .15s}
 .stay .open svg{width:16px;height:16px}

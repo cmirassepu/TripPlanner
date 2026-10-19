@@ -398,10 +398,11 @@ export function dayScreen(state: AppState): string {
         : timelineBody(state, plan, route.tripId, day);
 
   return `<div class="screen" ${areaStyle(areaColor(plan, stay?.area))}>${installBanner(state)}
-    <div class="bar">${backLink(routeHash({ name: 'trip', tripId: route.tripId }), pick(plan.title, lang) ?? 'Trip')}${pager(
+    <div class="bar day">${backLink(routeHash({ name: 'trip', tripId: route.tripId }), pick(plan.title, lang) ?? 'Trip')}${whereLabel(
       plan,
-      route,
-    )}</div>
+      day,
+      stay?.area,
+    )}${pager(plan, route)}</div>
     <p class="eyebrow a">${esc(longDay(day.date))}${stay?.area ? ` · ${esc(stay.area)}` : ''} · ${esc(dayNumber(plan, day))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
     <div class="tabs">${tabs}</div>
@@ -416,6 +417,54 @@ export function dayScreen(state: AppState): string {
  */
 function backLink(href: string, label: string): string {
   return `<a class="back glass" href="${esc(href)}">${ICONS.back}<span class="lbl">${esc(label)}</span></a>`;
+}
+
+/**
+ * La etiqueta que flota al bajar por un día o una parada: qué día es y dónde
+ * se está, para no confundirse de día leyendo. Tocarla sube arriba.
+ */
+function whereLabel(plan: TripPayload, day: Day, area: string | null | undefined): string {
+  const when = `Day ${plan.days.indexOf(day) + 1} · ${niceDate(day.date)}`;
+  return `<button class="where glass" data-act="top"><span class="d">${esc(when)}</span>${
+    area ? `<span class="a">${esc(area)}</span>` : ''
+  }</button>`;
+}
+
+/** Radio y tope de la lista de «cerca de aquí» de un sitio. */
+const NEARBY_RADIUS_M = 3000;
+const NEARBY_MAX = 6;
+
+/**
+ * Lo que hay cerca de un sitio, en línea recta y por distancia: ver y hacer
+ * por un lado, comer y beber por otro. Sin coordenadas no hay lista.
+ */
+function nearbySection(plan: TripPayload, tripId: string, day: Day, place: Place): string {
+  const from = place.coords;
+  if (!from) return '';
+  const lang = plan.primaryLanguage;
+  const rows = Object.values(plan.places)
+    .filter((pl) => pl.id !== place.id && pl.coords && !NOT_SIGHTS.has(pl.category ?? ''))
+    .map((pl) => ({ pl, away: haversine(from, pl.coords!) }))
+    .filter((x) => x.away <= NEARBY_RADIUS_M)
+    .sort((a, b) => a.away - b.away);
+  const list = (kind: 'see' | 'eat') =>
+    rows
+      .filter((x) => (x.pl.category === 'food' ? 'eat' : 'see') === kind)
+      .slice(0, NEARBY_MAX)
+      .map((x) => spot(plan, tripId, day, x.pl, [`${formatDistance(x.away)} away`, pick(x.pl.deep, lang) ?? ''].filter(Boolean).join(' · ')))
+      .join('');
+  const see = list('see');
+  const eat = list('eat');
+  if (!see && !eat) return '';
+
+  // El hotel de ese día, como referencia, si no es el sitio mismo.
+  const stay = stayOf(plan, day);
+  const hotel = stay?.place && stay.place !== place.id ? plan.places[stay.place] : undefined;
+  const hotelAway = hotel?.coords ? formatDistance(haversine(from, hotel.coords)) : null;
+
+  return `<div class="section"><h2>Nearby</h2><span class="meta">${hotelAway ? `hotel ${esc(hotelAway)}` : 'in a straight line'}</span></div>
+    ${see ? `<p class="group">See &amp; do</p><ul class="spots">${see}</ul>` : ''}
+    ${eat ? `<p class="group">Eat &amp; drink</p><ul class="spots">${eat}</ul>` : ''}`;
 }
 
 /** Las flechas de anterior y siguiente. Hacen lo mismo que deslizar el dedo. */
@@ -849,6 +898,7 @@ export function hotelScreen(state: AppState): string {
     </dl>
     ${notes.map((n) => `<p class="lead">${esc(n)}</p>`).join('')}
     ${facts ? `<details class="panel"><summary>Good to know</summary><ul>${facts}</ul></details>` : ''}
+    ${place ? nearbySection(plan, route.tripId, daysOfStay(plan, stay)[0] ?? plan.days[0], place) : ''}
   </div>`;
 }
 
@@ -867,10 +917,10 @@ export function stopScreen(state: AppState): string {
   const w = stop.waypoint;
   const place = plan.places[w.place];
   const stay = stayOf(plan, day);
-  const back = `<div class="bar">${backLink(
+  const back = `<div class="bar day">${backLink(
     routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'timeline' }),
     pick(day.title, lang) ?? day.id,
-  )}${pager(plan, route)}</div>`;
+  )}${whereLabel(plan, day, stay?.area)}${pager(plan, route)}</div>`;
   if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
 
   const when =
@@ -907,7 +957,8 @@ export function stopScreen(state: AppState): string {
       under: `<p class="meta">${esc(when)}${esc(travel)}</p>${anchor}${conflict}`,
       notes: w.notes ?? [],
       after: choices ? `<div class="section options"><h2>Pick by mood</h2></div><ul class="spots">${choices}</ul>` : '',
-    })}</div>`;
+    })}
+    ${nearbySection(plan, route.tripId, day, place)}</div>`;
 }
 
 /** Un sitio de la zona que no está (o no sólo) en el plan de ese día. */
@@ -927,7 +978,8 @@ export function placeScreen(state: AppState): string {
       routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'places' }),
       'Back',
     )}<span class="eyebrow a">${esc([label(place.category), place.area].filter(Boolean).join(' · '))}</span></div>
-    ${placeDetail(place, day, plan.primaryLanguage, stay?.area, { under: '', notes: [], after: '' })}</div>`;
+    ${placeDetail(place, day, plan.primaryLanguage, stay?.area, { under: '', notes: [], after: '' })}
+    ${nearbySection(plan, route.tripId, day, place)}</div>`;
 }
 
 function heroFigure(photo: Photo, lang: string): string {

@@ -450,6 +450,10 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       break;
     }
 
+    case 'top':
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      break;
+
     /* Mapa del día */
     case 'map-open':
       state.mapOpen = true;

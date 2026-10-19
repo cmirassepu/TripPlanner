@@ -94,13 +94,14 @@ p{margin:0}
 .back{display:inline-flex;align-items:center;gap:.15rem;font-weight:700;color:var(--a-ink);min-height:40px;max-width:70%;padding:0 .9rem 0 .5rem;border:1px solid var(--line);border-radius:2rem;text-decoration:none;font-size:.9rem;white-space:nowrap}
 .back .lbl{overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:16rem;transition:max-width .2s}
 /* al bajar por un día, el botón de volver se queda en la flecha y deja sitio a la etiqueta del día */
-.where{flex:1;min-width:0;min-height:40px;padding:0 .6rem;border:1px solid var(--line);border-radius:2rem;display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.2;color:var(--ink);opacity:0;pointer-events:none;transition:opacity .2s,box-shadow .2s}
+.where{flex:1;min-width:0;min-height:40px;padding:0 .4rem;border:1px solid var(--line);border-radius:2rem;display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.2;color:var(--ink);opacity:0;pointer-events:none;transition:opacity .2s,box-shadow .2s}
 .where span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.where .d{font-size:.64rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.where .d{font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .where .a{font-size:.84rem;font-weight:700}
 .scrolled .where{opacity:1;pointer-events:auto}
+.back .short{max-width:0;overflow:hidden;white-space:nowrap;transition:max-width .2s}
 .scrolled .bar.day .back .lbl{max-width:0}
-.scrolled .bar.day .back{padding-right:.45rem}
+.scrolled .bar.day .back .short{max-width:4rem}
 /* En un día o una parada, al bajar, los tres controles se funden en una sola
    pastilla: así el texto de debajo no asoma entre ellos. */
 .bar.day{margin:0 -.4rem;padding:.5rem .4rem calc(.5rem - 2px);border:1px solid transparent;border-radius:2rem;transition:background-color .2s,border-color .2s,box-shadow .2s}

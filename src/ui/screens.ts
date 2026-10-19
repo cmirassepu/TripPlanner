@@ -416,7 +416,9 @@ export function dayScreen(state: AppState): string {
  * en una parada) sigue el enlace.
  */
 function backLink(href: string, label: string): string {
-  return `<a class="back glass" href="${esc(href)}">${ICONS.back}<span class="lbl">${esc(label)}</span></a>`;
+  // `short` sólo se ve al bajar por un día, cuando el nombre largo se pliega:
+  // una flecha sola parece «izquierda», no «volver».
+  return `<a class="back glass" href="${esc(href)}">${ICONS.back}<span class="lbl">${esc(label)}</span><span class="short">Back</span></a>`;
 }
 
 /**

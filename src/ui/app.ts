@@ -74,7 +74,12 @@ async function boot(): Promise<void> {
   spike.startedAt = localStorage.getItem(SPIKE_KEY);
   spike.info = await probeInfo().catch(() => spike.info);
 
+  // El scroll al volver atrás lo repone la app, no el navegador: así no se pisan.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   addEventListener('hashchange', () => void navigate());
+  addEventListener('scroll', onScroll, { passive: true });
+  // `toggle` no burbujea: se escucha en captura.
+  document.addEventListener('toggle', onToggle, true);
   document.addEventListener('click', onClick);
   document.addEventListener('change', onChange);
   document.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -170,11 +175,29 @@ let shownHash: string | null = null;
  */
 const scrollByHash = new Map<string, number>();
 
+/**
+ * Las pantallas vistas, en orden, tal como las tiene el historial. Sirve para
+ * que el botón de volver use «atrás» de verdad cuando hay pantalla anterior (y
+ * se recupere su posición sin apilar historial) y siga su enlace cuando no la
+ * hay, por ejemplo con la app abierta directamente en una parada.
+ */
+const trail: string[] = [];
+/** La próxima navegación sustituye la pantalla actual en vez de apilarla. */
+let replacing = false;
+
 async function navigate(): Promise<void> {
   const changed = location.hash !== shownHash;
-  if (changed && shownHash !== null) scrollByHash.set(shownHash, window.scrollY);
-  // El aviso («Loaded…») es de la pantalla en la que salió: no viaja a la siguiente.
-  if (changed && shownHash !== null) state.flash = null;
+  if (changed) {
+    if (shownHash !== null) {
+      scrollByHash.set(shownHash, window.scrollY);
+      // El aviso («Loaded…») es de la pantalla en la que salió: no viaja a la siguiente.
+      state.flash = null;
+    }
+    if (trail.length >= 2 && trail[trail.length - 2] === location.hash) trail.pop();
+    else if (replacing && trail.length) trail[trail.length - 1] = location.hash;
+    else trail.push(location.hash);
+  }
+  replacing = false;
   shownHash = location.hash;
   state.route = parseRoute(location.hash);
   if (changed) state.mapOpen = false;
@@ -195,7 +218,24 @@ async function navigate(): Promise<void> {
   render();
   // `render` conserva el scroll para los repintados. Al cambiar de pantalla
   // se vuelve a donde se estaba si es una vuelta atrás, y si no, arriba.
-  if (changed) window.scrollTo({ top: scrollByHash.get(location.hash) ?? 0 });
+  if (changed) {
+    const top = scrollByHash.get(location.hash) ?? 0;
+    window.scrollTo({ top });
+    const got = window.scrollY;
+    if (got !== top) {
+      // La página aún no tenía toda su altura (fotos sin decodificar): se
+      // vuelve a intentar en el siguiente pintado, si nadie ha movido el scroll.
+      requestAnimationFrame(() => {
+        if (window.scrollY === got) window.scrollTo({ top });
+      });
+    }
+    onScroll();
+  }
+}
+
+/** Marca el documento cuando se ha bajado: los controles de arriba flotan y el título se aparta. */
+function onScroll(): void {
+  document.documentElement.classList.toggle('scrolled', window.scrollY > 28);
 }
 
 /** Un enlace hacia delante: su destino empieza arriba aunque se haya visitado antes. */
@@ -225,7 +265,30 @@ function render(): void {
                   : libraryScreen(state);
 
   root.innerHTML = (state.flash ? `<div class="install">${escapeText(state.flash)}</div>` : '') + screen;
+  root.querySelectorAll('details').forEach((d, i) => {
+    const open = openDetails.get(detailsKey(i));
+    if (open !== undefined) d.open = open;
+  });
   window.scrollTo({ top: scroll });
+}
+
+/**
+ * Los desplegables (las estancias del viaje, «Good to know») que el usuario ha
+ * abierto o cerrado, por pantalla y posición. Un repintado o la vuelta atrás
+ * los deja como estaban; si no, la pantalla no cabría igual y el scroll no
+ * volvería al mismo sitio.
+ */
+const openDetails = new Map<string, boolean>();
+
+function detailsKey(i: number): string {
+  return `${location.hash}#${i}`;
+}
+
+function onToggle(event: Event): void {
+  const d = event.target;
+  if (!(d instanceof HTMLDetailsElement)) return;
+  const all = Array.from(document.querySelectorAll('#app details'));
+  openDetails.set(detailsKey(all.indexOf(d)), d.open);
 }
 
 /* ── Eventos ─────────────────────────────────────────────────────────── */
@@ -235,8 +298,17 @@ function onClick(event: Event): void {
   // anota que van hacia delante.
   const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#/"]');
   if (link && !link.dataset.go && !link.dataset.swap) {
-    forward(link.getAttribute('href')!);
     state.flash = null;
+    if (link.classList.contains('back')) {
+      // Volver: «atrás» de verdad si hay pantalla anterior, que recupera su
+      // posición y no apila historial. Sin ella, el enlace a la pantalla madre.
+      if (trail.length >= 2) {
+        event.preventDefault();
+        history.back();
+      }
+      return;
+    }
+    forward(link.getAttribute('href')!);
     return;
   }
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act],[data-go],[data-swap]');
@@ -297,8 +369,10 @@ function onTouchEnd(event: TouchEvent): void {
 }
 
 function swap(hash: string): void {
+  if (hash === location.hash) return;
   state.flash = null;
   forward(hash);
+  replacing = true;
   location.replace(hash);
 }
 
@@ -375,10 +449,6 @@ async function act(action: string, el: HTMLElement): Promise<void> {
       render();
       break;
     }
-
-    case 'back':
-      history.back();
-      break;
 
     /* Mapa del día */
     case 'map-open':

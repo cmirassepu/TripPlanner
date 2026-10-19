@@ -81,11 +81,18 @@ p{margin:0}
 .eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
 .eyebrow.a{color:var(--a-ink)}
 
-/* barra de arriba */
-.bar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.6rem 0 .4rem;position:sticky;top:var(--safe-top);background:var(--bg);z-index:3}
+/* barra de arriba: no es una banda, sino controles sueltos que flotan al bajar.
+   La barra en sí es transparente y deja pasar los toques; al bajar, el título
+   se aparta y queda sólo la pastilla de volver (y las flechas, si las hay). */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.6rem 0 .4rem;position:sticky;top:var(--safe-top);z-index:3;pointer-events:none}
+.bar>*{pointer-events:auto}
 .bar h1{font-size:1.35rem;flex:1;margin:0}
-.back{display:inline-flex;align-items:center;gap:.2rem;font-weight:700;color:var(--a-ink);min-height:44px;text-decoration:none;font-size:.95rem}
-.back.grow{flex:1;min-width:0}
+.bar h1,.bar .eyebrow{transition:opacity .2s}
+.scrolled .bar h1,.scrolled .bar .eyebrow{opacity:0;pointer-events:none}
+.glass{background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);transition:box-shadow .2s}
+.scrolled .glass{box-shadow:0 3px 14px rgba(30,28,24,.12)}
+.back{display:inline-flex;align-items:center;gap:.15rem;font-weight:700;color:var(--a-ink);min-height:40px;max-width:70%;padding:0 .9rem 0 .5rem;border:1px solid var(--line);border-radius:2rem;text-decoration:none;font-size:.9rem;white-space:nowrap}
+.back .lbl{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .back svg{width:18px;height:18px;flex:none}
 .arrows{display:flex;gap:.4rem}
 .arrows .chip{width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center}
@@ -94,7 +101,7 @@ p{margin:0}
 .chip[aria-pressed=true]{background:var(--a);color:#fff;border-color:var(--a)}
 .chip.off{opacity:.3}
 .chip img{width:24px;height:24px;border-radius:50%;object-fit:cover;margin-left:-.5rem}
-.tabs{display:flex;gap:.25rem;margin:.9rem 0 1rem;padding:.25rem;background:var(--card);border:1px solid var(--line);border-radius:2rem;position:sticky;top:calc(var(--safe-top) + 56px);z-index:2}
+.tabs{display:flex;gap:.25rem;margin:.9rem 0 1rem;padding:.25rem;background:var(--card);border:1px solid var(--line);border-radius:2rem;position:sticky;top:calc(var(--safe-top) + 1rem + 40px);z-index:2}
 .tabs button{flex:1;padding:.5rem 0;border-radius:2rem;font-size:.9rem;font-weight:700;color:var(--muted);text-align:center}
 .tabs button[aria-pressed=true]{background:var(--a);color:#fff}
 .filters{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin:.25rem 0 .5rem}
@@ -123,17 +130,20 @@ p{margin:0}
 .trip .tag{font-size:.8rem;font-weight:700;color:var(--a-ink);margin-top:.2rem}
 
 /* pantalla del viaje */
-.cover{position:relative;margin:0 -1rem;aspect-ratio:4/3;max-width:none;overflow:hidden;background:var(--a-soft)}
+.cover{position:relative;margin:calc(-.5rem - var(--safe-top)) -1rem 0;aspect-ratio:4/3;max-width:none;overflow:hidden;background:var(--a-soft)}
+.install+.cover{margin-top:0}
 .cover img{width:100%;height:100%;object-fit:cover}
-.cover .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.02) 40%,rgba(0,0,0,.62))}
+.cover .shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.3),rgba(0,0,0,0) 26%,rgba(0,0,0,.02) 42%,rgba(0,0,0,.62))}
 .cover .text{position:absolute;left:1rem;right:1rem;bottom:1rem;color:#fff}
 .cover h1{font-size:2.3rem;color:#fff;margin:.1rem 0}
 .cover .eyebrow,.cover .meta{color:rgba(255,255,255,.88)}
-.cover .back{position:absolute;top:calc(.4rem + var(--safe-top));left:.6rem;color:#fff;background:rgba(0,0,0,.35);border-radius:2rem;padding:0 .8rem 0 .5rem;min-height:36px;font-size:.9rem}
+.cover .back{position:absolute;top:calc(.5rem + var(--safe-top));left:.6rem;color:#fff;background:rgba(0,0,0,.35);border-color:rgba(255,255,255,.25);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);min-height:36px}
 .today{margin:1rem 0;padding:1rem;background:var(--a-soft);border-radius:1.1rem;display:grid;grid-template-columns:1fr auto;gap:.75rem;align-items:center;width:100%}
 .today h3{margin:.15rem 0 .1rem}
 .today .go{width:40px;height:40px;border-radius:50%;background:var(--a);color:#fff;display:grid;place-items:center}
 .today .go svg{width:16px;height:16px}
+.today .num{display:grid;justify-items:center;line-height:1;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--a-ink);padding:0 .25rem}
+.today .num b{font-family:var(--display);font-size:2.4rem;letter-spacing:-.02em;margin-bottom:.15rem}
 .stays{list-style:none;margin:0;padding:0}
 .stay{display:grid;grid-template-columns:72px 1fr auto;gap:.9rem;align-items:center;padding:.6rem 0;cursor:pointer;list-style:none}
 .stay::-webkit-details-marker{display:none}

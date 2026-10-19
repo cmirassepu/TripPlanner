@@ -290,27 +290,35 @@ export function tripScreen(state: AppState): string {
   const lang = plan.primaryLanguage;
   const cover = coverOf(plan);
 
-  // La tarjeta de «hoy»: el día en curso o, fuera del viaje, el primero.
-  const todayDay = plan.days.find((d) => d.date === todayIso) ?? plan.days[0];
+  // La tarjeta de arriba: el día en curso; antes del viaje, la cuenta atrás.
+  // Después del viaje no hay tarjeta.
+  const todayDay = plan.days.find((d) => d.date === todayIso);
   const todayStay = todayDay && plan.stays.find((st) => st.id === todayDay.stay);
+  const first = plan.days[0];
+  const left = daysBetween(todayIso, plan.startDate);
   const todayCard = todayDay
     ? `<button class="today" ${areaStyle(areaColor(plan, todayStay?.area))} data-go="${esc(
         routeHash({ name: 'day', tripId, dayId: todayDay.id, tab: 'timeline' }),
       )}">
-        <span><p class="eyebrow a">${todayDay.date === todayIso ? 'Today' : 'First day'} · ${esc(dayNumber(plan, todayDay))}${
-          todayStay?.area ? ` · ${esc(todayStay.area)}` : ''
-        }</p>
+        <span><p class="eyebrow a">Today · ${esc(dayNumber(plan, todayDay))}${todayStay?.area ? ` · ${esc(todayStay.area)}` : ''}</p>
         <h3>${esc(pick(todayDay.title, lang) ?? todayDay.id)}</h3>
         <p class="meta">${esc(longDay(todayDay.date))}${todayDay.startTime ? ` · starts at ${esc(todayDay.startTime)}` : ''}</p></span>
         <span class="go">${ICONS.chev}</span></button>`
-    : '';
+    : first && todayIso < plan.startDate
+      ? `<div class="today count" ${areaStyle(areaColor(plan, stayOf(plan, first)?.area))}>
+        <span><p class="eyebrow a">Countdown</p>
+        <h3>${esc(longDay(plan.startDate))}</h3>
+        <p class="meta">${esc(pick(first.title, lang) ?? first.id)}</p></span>
+        <span class="num"><b>${left}</b>day${left === 1 ? '' : 's'}</span></div>`
+      : '';
 
   const stays = plan.stays
     .map((st, i) => {
       const color = areaColor(plan, st.area);
       const photo = areaPhoto(plan, st.area) ?? firstPhoto(st.place ? plan.places[st.place] : undefined);
       const days = daysOfStay(plan, st);
-      const open = days.some((d) => d.date === todayIso) || (todayIso < plan.startDate && i === 0);
+      // Sólo la estancia en curso empieza abierta; el resto, plegadas.
+      const open = days.some((d) => d.date === todayIso);
       const legs = (plan.bookings ?? []).filter((b) => b.date === st.to && (b.kind === 'flight' || b.kind === 'transfer'));
       const leg = legs[0];
       const rows = days
@@ -344,7 +352,7 @@ export function tripScreen(state: AppState): string {
 
   return `${installBanner(state)}
     <div class="cover">${cover ? `<img src="${esc(cover.src)}" alt="">` : ''}<div class="shade"></div>
-      <a class="back" href="#/">${ICONS.back} Trips</a>
+      ${backLink('#/', 'Trips')}
       <div class="text"><p class="eyebrow">${esc(niceDate(plan.startDate))} – ${esc(niceDate(plan.endDate))}</p>
         <h1>${esc(pick(plan.title, lang) ?? tripId)}</h1>
         <p class="meta">${plan.days.length} days · ${plan.stays.length} stays</p></div></div>
@@ -390,13 +398,24 @@ export function dayScreen(state: AppState): string {
         : timelineBody(state, plan, route.tripId, day);
 
   return `<div class="screen" ${areaStyle(areaColor(plan, stay?.area))}>${installBanner(state)}
-    <div class="bar"><a class="back grow" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">${ICONS.back} ${esc(
-      pick(plan.title, lang) ?? 'Trip',
-    )}</a>${pager(plan, route)}</div>
+    <div class="bar">${backLink(routeHash({ name: 'trip', tripId: route.tripId }), pick(plan.title, lang) ?? 'Trip')}${pager(
+      plan,
+      route,
+    )}</div>
     <p class="eyebrow a">${esc(longDay(day.date))}${stay?.area ? ` · ${esc(stay.area)}` : ''} · ${esc(dayNumber(plan, day))}</p>
     <h1>${esc(pick(day.title, lang) ?? day.id)}</h1>
     <div class="tabs">${tabs}</div>
     ${body}</div>`;
+}
+
+/**
+ * El botón de volver: un enlace a la pantalla madre. Cuando hay una pantalla
+ * anterior en el historial, la app lo convierte en «atrás» de verdad (app.ts),
+ * y así se vuelve a la misma posición; sin historial (la app abierta directa
+ * en una parada) sigue el enlace.
+ */
+function backLink(href: string, label: string): string {
+  return `<a class="back glass" href="${esc(href)}">${ICONS.back}<span class="lbl">${esc(label)}</span></a>`;
 }
 
 /** Las flechas de anterior y siguiente. Hacen lo mismo que deslizar el dedo. */
@@ -404,8 +423,8 @@ function pager(plan: TripPayload, route: Route): string {
   const { prev, next } = neighbours(plan, route);
   const arrow = (to: Route | null, glyph: string, text: string) =>
     to
-      ? `<button class="chip" data-swap="${esc(routeHash(to))}" aria-label="${text}">${glyph}</button>`
-      : `<span class="chip off" aria-hidden="true">${glyph}</span>`;
+      ? `<button class="chip glass" data-swap="${esc(routeHash(to))}" aria-label="${text}">${glyph}</button>`
+      : `<span class="chip glass off" aria-hidden="true">${glyph}</span>`;
   return `<div class="arrows">${arrow(prev, ICONS.back, 'Previous')}${arrow(next, ICONS.chev, 'Next')}</div>`;
 }
 
@@ -770,9 +789,10 @@ export function bookingsScreen(state: AppState): string {
     ...plan.stays.map((st) => cardOfStay(plan, route.tripId, st)),
   ].sort((x, y) => x.date.localeCompare(y.date));
 
-  return `<div class="bar"><a class="back" href="${esc(routeHash({ name: 'trip', tripId: route.tripId }))}">${ICONS.back} ${esc(
+  return `<div class="bar">${backLink(
+    routeHash({ name: 'trip', tripId: route.tripId }),
     pick(plan.title, plan.primaryLanguage) ?? 'Trip',
-  )}</a></div>
+  )}</div>
     <h1>Bookings</h1>
     ${cards.length ? cards.map(bookingCard).join('') : '<p class="empty">No bookings yet.</p>'}`;
 }
@@ -814,7 +834,7 @@ export function hotelScreen(state: AppState): string {
   const facts = (place?.facts ?? []).map((f) => `<li>${esc(pick(f.text, lang) ?? '')}</li>`).join('');
 
   return `<div class="screen place" ${areaStyle(areaColor(plan, stay.area))}>
-    <div class="bar"><button class="back" data-act="back">${ICONS.back} Back</button><span class="eyebrow a">Hotel${
+    <div class="bar">${backLink(routeHash({ name: 'trip', tripId: route.tripId }), 'Back')}<span class="eyebrow a">Hotel${
       stay.area ? ` · ${esc(stay.area)}` : ''
     }</span></div>
     ${hero}
@@ -847,9 +867,10 @@ export function stopScreen(state: AppState): string {
   const w = stop.waypoint;
   const place = plan.places[w.place];
   const stay = stayOf(plan, day);
-  const back = `<div class="bar"><a class="back grow" href="${esc(
+  const back = `<div class="bar">${backLink(
     routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'timeline' }),
-  )}">${ICONS.back} ${esc(pick(day.title, lang) ?? day.id)}</a>${pager(plan, route)}</div>`;
+    pick(day.title, lang) ?? day.id,
+  )}${pager(plan, route)}</div>`;
   if (!place) return `${back}<p class="empty">Unknown place: ${esc(w.place)}</p>`;
 
   const when =
@@ -902,9 +923,10 @@ export function placeScreen(state: AppState): string {
   // Se vuelve con el «atrás» del navegador: a un sitio se llega desde la
   // pestaña de sitios o desde las opciones de una parada.
   return `<div class="screen place" ${areaStyle(areaColor(plan, stay?.area))}>
-    <div class="bar"><button class="back" data-act="back">${ICONS.back} Back</button><span class="eyebrow a">${esc(
-      [label(place.category), place.area].filter(Boolean).join(' · '),
-    )}</span></div>
+    <div class="bar">${backLink(
+      routeHash({ name: 'day', tripId: route.tripId, dayId: day.id, tab: 'places' }),
+      'Back',
+    )}<span class="eyebrow a">${esc([label(place.category), place.area].filter(Boolean).join(' · '))}</span></div>
     ${placeDetail(place, day, plan.primaryLanguage, stay?.area, { under: '', notes: [], after: '' })}</div>`;
 }
 
@@ -1083,7 +1105,7 @@ export function settingsScreen(state: AppState, spike: SpikeView): string {
   const v = verdict(spike.info, s.persisted, spike.ranges, spike.startedAt);
   const tone = v.startsWith('PASSED') ? 'ok' : v.includes('refused') || v.includes('fails') ? 'bad' : '';
 
-  return `<div class="bar"><a class="back" href="#/">${ICONS.back} Trips</a><h1>Settings</h1></div>
+  return `<div class="bar">${backLink('#/', 'Trips')}<h1>Settings</h1></div>
 
   <div class="panel">
     <h3>Text size</h3>

@@ -71,4 +71,28 @@ describe('vista general', () => {
     const todo = out.slice(out.indexOf('id="todo"'));
     assert.match(todo, /<ul class="todo"><li><b>Make &lt;the&gt; GPT<\/b>/);
   });
+
+  test('lo que queda por reservar sale arriba, con las opciones plegadas', () => {
+    const d = trip.payload.days[1];
+    const out = renderOverview(trip.payload, {
+      toBook: [
+        { id: 'late', date: null, title: 'Later thing' },
+        {
+          id: 'hotel', date: d.date, title: 'Hotel <near> the airport', why: 'Early flight', bookBy: 'now',
+          options: [{ name: 'Good', url: 'https://example.com', note: 'EUR 90' }, { name: 'Bad', url: 'javascript:alert(1)' }],
+        },
+        { id: 'done', date: d.date, title: 'Already booked', status: 'booked' },
+      ],
+    });
+    const top = out.slice(out.indexOf('id="tobook"'), out.indexOf('class="route"'));
+    assert.ok(top.length > 0, 'la sección va antes de la ruta');
+    assert.ok(top.indexOf('book-hotel') < top.indexOf('book-late'), 'por fecha; sin fecha, al final');
+    assert.match(top, new RegExp(`href="#${d.id}"`));
+    assert.match(top, /Hotel &lt;near&gt; the airport/);
+    assert.match(top, /<details class="opts"><summary>Options and links \(2\)/);
+    assert.match(top, /<a href="https:\/\/example.com"/);
+    assert.doesNotMatch(top, /javascript:/);
+    assert.doesNotMatch(out, /Already booked/);
+    assert.match(out.slice(out.indexOf('id="todo"')), /2 things still to book/);
+  });
 });

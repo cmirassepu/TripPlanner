@@ -7,15 +7,16 @@
  * `<!doctype>`, que lo pone la publicación). Con él, una página completa para
  * abrirla como archivo. Antes de generar se valida: con errores no sale nada.
  *
- * Si junto al archivo hay un `<nombre>.ideas.json` (lista de cambios opcionales)
- * o un `<nombre>.todo.json` (tareas propias), también salen en la página.
+ * Si junto al archivo hay un `<nombre>.ideas.json` (lista de cambios opcionales),
+ * un `<nombre>.todo.json` (tareas propias) o un `<nombre>.tobook.json` (lo que
+ * queda por reservar, con opciones y enlaces), también salen en la página.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import type { TripFile } from '../src/model/types.ts';
 import { validateFile } from '../src/validate/validate.ts';
-import { renderOverview, wrapPage, type Idea, type Task } from '../src/render/overview.ts';
+import { renderOverview, wrapPage, type Idea, type Task, type ToBook } from '../src/render/overview.ts';
 
 const [input, output] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const standalone = process.argv.includes('--standalone');
@@ -41,6 +42,7 @@ const sibling = <T>(ext: string): T[] => {
 };
 const ideas = sibling<Idea>('.ideas.json');
 const tasks = sibling<Task>('.todo.json');
-const body = renderOverview(trip.payload, { generatedAt: local, version: trip.version, ideas, tasks });
+const toBook = sibling<ToBook>('.tobook.json');
+const body = renderOverview(trip.payload, { generatedAt: local, version: trip.version, ideas, tasks, toBook });
 writeFileSync(output, standalone ? wrapPage(body) : body);
 console.log(`Vista general escrita en ${output}${ideas.length ? ` (${ideas.length} cambios opcionales)` : ''}`);

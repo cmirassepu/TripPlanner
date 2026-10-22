@@ -25,6 +25,27 @@ export interface OverviewOptions {
   ideas?: Idea[];
   /** Tareas propias que no salen del archivo de viaje (p. ej. «hacer el GPT de Agatka»). */
   tasks?: Task[];
+  /** Lo que queda por reservar, con el porqué y opciones; vive fuera del archivo de viaje. */
+  toBook?: ToBook[];
+}
+
+/**
+ * Algo que queda por reservar. Como las ideas, es una lista de trabajo al lado
+ * del archivo de viaje: los consejos y enlaces no son parte del plan.
+ */
+export interface ToBook {
+  id: string;
+  /** Día en que hace falta, ISO. `null` si no tiene día. */
+  date: string | null;
+  title: string;
+  /** Por qué hay que reservarlo (o si basta con hacerlo allí). */
+  why?: string | null;
+  /** Hasta cuándo se puede esperar, en texto libre: «now», «by 1 Dec», «on the spot». */
+  bookBy?: string | null;
+  /** `asked` = pedido, esperando respuesta. `booked` ya no sale en la página. */
+  status?: 'todo' | 'asked' | 'booked';
+  options?: { name: string; url?: string | null; note?: string | null }[];
+  tips?: string | null;
 }
 
 export interface Task {
@@ -77,6 +98,7 @@ export function renderOverview(plan: TripPayload, opts: OverviewOptions = {}): s
 
   const counts = { planned: 0, travel: 0, outline: 0, open: 0 };
   for (const d of plan.days) counts[dayStatus(d)]++;
+  const toBook = (opts.toBook ?? []).filter((b) => b.status !== 'booked');
 
   return `<title>${esc(title)}</title>
 <style>${STYLE}</style>
@@ -99,9 +121,11 @@ export function renderOverview(plan: TripPayload, opts: OverviewOptions = {}): s
     </p>
   </div>
   <nav class="jump">
-    <a href="#notes" class="needs-notes" hidden>Notes</a><a href="#days">Days</a><a href="#ideas">Optional changes</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
+    <a href="#notes" class="needs-notes" hidden>Notes</a>${toBook.length ? '<a href="#tobook">To book</a>' : ''}<a href="#days">Days</a><a href="#ideas">Optional changes</a><a href="#places">Places</a><a href="#bookings">Bookings</a><a href="#todo">To do</a>
   </nav>
 </header>
+
+${toBookBlock(plan, toBook)}
 
 ${routeStrip(legs)}
 
@@ -132,7 +156,7 @@ ${ideasBlock(plan, opts.ideas ?? [])}
 
 <section id="todo">
   <h2>To do</h2>
-  ${todoBlock(plan, lang, opts.tasks ?? [])}
+  ${todoBlock(plan, lang, opts.tasks ?? [], toBook.length)}
 </section>
 </div>
 <button type="button" class="back" hidden>← Back</button>
@@ -597,9 +621,49 @@ function bookingRow(plan: TripPayload, b: Booking, lang: string): string {
     <td class="ref">${esc(b.ref ?? '—')}</td></tr>`;
 }
 
+/* ── lo que queda por reservar ───────────────────────────────────────── */
+
+/**
+ * Arriba del todo: una tarjeta por reserva, con el porqué y la fecha límite a
+ * la vista y las opciones con sus enlaces plegadas debajo.
+ */
+function toBookBlock(plan: TripPayload, items: ToBook[]): string {
+  if (!items.length) return '';
+  const sorted = [...items].sort((a, b) => (a.date ?? '9').localeCompare(b.date ?? '9'));
+  return `<section id="tobook">
+  <h2>Still to book <span class="count">${items.length}</span></h2>
+  <p class="lede">In date order. Open “Options and links” for suggestions on where to book each one.</p>
+  <ul class="tobook">${sorted.map((b) => toBookCard(plan, b)).join('')}</ul>
+</section>`;
+}
+
+function toBookCard(plan: TripPayload, b: ToBook): string {
+  const day = b.date ? plan.days.find((d) => d.date === b.date) : null;
+  const when = day
+    ? `<a class="when" href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
+    : `<span class="when">${b.date ? esc(dayMonth(b.date)) : 'Any day'}</span>`;
+  const asked = b.status === 'asked' ? '<span class="pill travel">Asked, waiting</span>' : '';
+  const by = b.bookBy ? `<span class="by">Book: ${esc(b.bookBy)}</span>` : '';
+  const options = (b.options ?? [])
+    .map((o) => {
+      const name = o.url && /^https:\/\//.test(o.url)
+        ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
+        : `<b>${esc(o.name)}</b>`;
+      return `<li>${name}${o.note ? ` <span class="sub">${esc(o.note)}</span>` : ''}</li>`;
+    })
+    .join('');
+  const more = options || b.tips
+    ? `<details class="opts"><summary>Options and links${options ? ` (${b.options!.length})` : ''}</summary>
+      ${options ? `<ul>${options}</ul>` : ''}${b.tips ? `<p class="tip">${esc(b.tips)}</p>` : ''}
+    </details>`
+    : '';
+  return `<li id="book-${esc(b.id)}" class="bk"><div class="bh">${when}<b>${esc(b.title)}</b>${asked}${by}</div>
+    ${b.why ? `<p class="why">${esc(b.why)}</p>` : ''}${more}</li>`;
+}
+
 /* ── lo que falta ────────────────────────────────────────────────────── */
 
-function todoBlock(plan: TripPayload, lang: string, tasks: Task[]): string {
+function todoBlock(plan: TripPayload, lang: string, tasks: Task[], toBook = 0): string {
   const items: string[] = tasks.map(
     (t) => `<li><b>${esc(t.text)}</b>${t.when ? ` <span class="tag">${esc(t.when)}</span>` : ''}</li>`,
   );
@@ -617,7 +681,9 @@ function todoBlock(plan: TripPayload, lang: string, tasks: Task[]): string {
       .join('')}</span></li>`);
   }
 
-  const bookings = (plan.bookings ?? []).filter((b) => b.status === 'todo' || b.status === 'pending');
+  // Con la lista de reservas arriba, aquí sólo se remite a ella.
+  if (toBook) items.push(`<li><b><a href="#tobook">${toBook} thing${toBook === 1 ? '' : 's'} still to book</a></b>: see the list at the top</li>`);
+  const bookings = toBook ? [] : (plan.bookings ?? []).filter((b) => b.status === 'todo' || b.status === 'pending');
   for (const b of bookings) {
     items.push(`<li><b>${b.status === 'todo' ? 'Book' : 'Waiting on'}:</b> ${esc(pick(b.title, lang) ?? b.id)} (${esc(dayMonth(b.date))})</li>`);
   }
@@ -633,7 +699,7 @@ function todoBlock(plan: TripPayload, lang: string, tasks: Task[]): string {
         .map((n) => ({ d, text: pick(n.text, lang)! })),
     ),
   );
-  if (pending.length) {
+  if (pending.length && !toBook) {
     items.push(`<li><b>${pending.length} other things to book</b><ul class="sublist">${pending
       .map(({ d, text }) => `<li><a href="#${esc(d.id)}">${esc(dayMonth(d.date))}</a> ${esc(text)}</li>`)
       .join('')}</ul></li>`);
@@ -736,6 +802,7 @@ const STYLE = `
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
 .page{max-width:52rem;margin:0 auto;padding-inline:16px;padding-block:24px 64px;display:grid;gap:40px}
+.page>*{min-width:0}
 a{color:var(--accent)}
 h1{font-size:2rem;line-height:1.15;margin:0;text-wrap:balance;letter-spacing:-.01em}
 h2{font-size:1.3rem;margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
@@ -821,6 +888,19 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .lbl{display:inline-block;min-width:5.5rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink)}
 .tag.idea{margin-left:8px;color:var(--outline-ink);border-color:var(--outline)}
 .todo>li{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.tobook{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.bk{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:6px;padding:10px 12px;display:grid;gap:4px}
+.bk:target{outline:2px solid var(--accent);outline-offset:2px}
+.bh{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.bh .when{font-variant-numeric:tabular-nums;min-width:5.5rem}
+.by{margin-left:auto;font-size:.78rem;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:99px}
+.why{margin:0;font-size:.9rem;color:var(--muted);max-width:70ch}
+.opts>summary{font-size:.85rem;font-weight:600;color:var(--accent);list-style:none}
+.opts>summary::-webkit-details-marker{display:none}
+.opts>summary::before{content:"▸ "}
+.opts[open]>summary::before{content:"▾ "}
+.opts ul{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;font-size:.9rem}
+.tip{margin:6px 0 0;font-size:.85rem;color:var(--muted);max-width:70ch}
 .sublist{margin:6px 0 0;padding-left:18px;display:grid;gap:2px;font-size:.9rem}
 summary{cursor:pointer}
 .stop>summary,.choice>summary,.area>summary,.place>summary,.idea>summary{list-style:none}

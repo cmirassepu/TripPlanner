@@ -49,8 +49,19 @@ export interface ToBook {
   bookByDate?: string | null;
   /** `asked` = pedido, esperando respuesta. `booked` ya no sale en la página. */
   status?: 'todo' | 'asked' | 'booked';
-  options?: { name: string; url?: string | null; note?: string | null }[];
+  /**
+   * Dónde reservar: sale a la vista en la tarjeta como botón «Book». Si falta,
+   * se toma la primera de `options`, que es la recomendada.
+   */
+  book?: BookOption | null;
+  options?: BookOption[];
   tips?: string | null;
+}
+
+export interface BookOption {
+  name: string;
+  url?: string | null;
+  note?: string | null;
 }
 
 export interface Task {
@@ -660,7 +671,7 @@ function toBookBlock(plan: TripPayload, items: ToBook[]): string {
   keyed.sort((a, b) => a.by.localeCompare(b.by) || a.date.localeCompare(b.date));
   return `<section id="tobook">
   <h2>Still to book <span class="count">${items.length}</span></h2>
-  <p class="lede">What needs booking soonest comes first. Open “Options and links” for suggestions on where to book each one.</p>
+  <p class="lede">What needs booking soonest comes first. Each card has a “Book” link to the recommended place; other options are folded below it.</p>
   <div class="sortby">Sort by <button type="button" data-sort="by" aria-pressed="true">Book by</button><button type="button" data-sort="date" aria-pressed="false">Trip date</button></div>
   <ul class="tobook">${keyed.map((k) => toBookCard(plan, k.b, k.by)).join('')}</ul>
 </section>`;
@@ -716,22 +727,31 @@ function toBookCard(plan: TripPayload, b: ToBook, by = '9'): string {
     ? `<a class="when" href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
     : `<span class="when">${b.date ? esc(dayMonth(b.date)) : 'Any day'}</span>`;
   const asked = b.status === 'asked' ? '<span class="pill travel">Asked, waiting</span>' : '';
-  const byPill = b.bookBy ? `<span class="by">Book: ${esc(b.bookBy)}</span>` : '';
-  const options = (b.options ?? [])
+  const byPill = b.bookBy ? `<span class="by">Book by: ${esc(b.bookBy)}</span>` : '';
+  const safeUrl = (o: BookOption) => (o.url && /^https:\/\//.test(o.url) ? o.url : null);
+  // Dónde reservar, a la vista: lo dicho en `book` o, si no, la primera opción.
+  const primary = b.book ?? b.options?.[0] ?? null;
+  const rest = (b.options ?? []).filter((o) => o !== primary && !(safeUrl(o) && safeUrl(o) === safeUrl(primary!)));
+  const go = primary
+    ? `<p class="bookat">${safeUrl(primary)
+      ? `<a class="go" href="${esc(safeUrl(primary)!)}" target="_blank" rel="noopener">Book: ${esc(primary.name)} ↗</a>`
+      : `<span class="go plain">Book: ${esc(primary.name)}</span>`}${primary.note ? ` <span class="sub">${esc(primary.note)}</span>` : ''}</p>`
+    : '';
+  const options = rest
     .map((o) => {
-      const name = o.url && /^https:\/\//.test(o.url)
-        ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
+      const name = safeUrl(o)
+        ? `<a href="${esc(safeUrl(o)!)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
         : `<b>${esc(o.name)}</b>`;
       return `<li>${name}${o.note ? ` <span class="sub">${esc(o.note)}</span>` : ''}</li>`;
     })
     .join('');
   const more = options || b.tips
-    ? `<details class="opts"><summary>Options and links${options ? ` (${b.options!.length})` : ''}</summary>
+    ? `<details class="opts"><summary>${options ? `Other options and links (${rest.length})` : 'Tips'}</summary>
       ${options ? `<ul>${options}</ul>` : ''}${b.tips ? `<p class="tip">${esc(b.tips)}</p>` : ''}
     </details>`
     : '';
   return `<li id="book-${esc(b.id)}" class="bk${by === '0000-00-00' ? ' due' : ''}" data-by="${esc(by)}" data-date="${esc(b.date ?? '9')}"><div class="bh">${when}<b>${esc(b.title)}</b>${asked}${byPill}</div>
-    ${b.why ? `<p class="why">${esc(b.why)}</p>` : ''}${more}</li>`;
+    ${b.why ? `<p class="why">${esc(b.why)}</p>` : ''}${go}${more}</li>`;
 }
 
 /* ── lo que falta ────────────────────────────────────────────────────── */
@@ -972,6 +992,9 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .bh .when{font-variant-numeric:tabular-nums;min-width:5.5rem}
 .by{margin-left:auto;font-size:.78rem;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:99px}
 .why{margin:0;font-size:.9rem;color:var(--muted);max-width:70ch}
+.bookat{margin:2px 0 0;font-size:.9rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;max-width:70ch}
+.go{display:inline-block;font-weight:600;color:var(--card);background:var(--accent);padding:3px 10px;border-radius:6px;text-decoration:none}
+.go.plain{color:var(--ink);background:var(--open)}
 .opts>summary{font-size:.85rem;font-weight:600;color:var(--accent);list-style:none}
 .opts>summary::-webkit-details-marker{display:none}
 .opts>summary::before{content:"▸ "}

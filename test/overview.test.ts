@@ -91,11 +91,31 @@ describe('vista general', () => {
     assert.match(top, /class="bk due" data-by="0000-00-00" data-date="[0-9-]+"/);
     assert.match(top, new RegExp(`href="#${d.id}"`));
     assert.match(top, /Hotel &lt;near&gt; the airport/);
-    assert.match(top, /<details class="opts"><summary>Options and links \(2\)/);
-    assert.match(top, /<a href="https:\/\/example.com"/);
+    assert.match(top, /<a class="go" href="https:\/\/example.com" target="_blank" rel="noopener">Book: Good ↗<\/a> <span class="sub">EUR 90<\/span>/);
+    assert.match(top, /<details class="opts"><summary>Other options and links \(1\)<\/summary>\s*<ul><li><b>Bad<\/b><\/li>/);
     assert.doesNotMatch(top, /javascript:/);
     assert.doesNotMatch(out, /Already booked/);
     assert.match(out.slice(out.indexOf('id="todo"')), /2 things still to book/);
+  });
+
+  test('«book» manda sobre las opciones y no se repite entre ellas', () => {
+    const d = trip.payload.days[0];
+    const out = renderOverview(trip.payload, {
+      toBook: [
+        {
+          id: 'park', date: d.date, title: 'Park', book: { name: 'Official site', url: 'https://park.example/a' },
+          options: [{ name: 'Same page', url: 'https://park.example/a' }, { name: 'Other', url: 'https://park.example/b' }],
+        },
+        { id: 'ask', date: d.date, title: 'Ask', options: [{ name: 'The hotel desk', note: 'at check-in' }], tips: 'Cash only' },
+      ],
+    });
+    const park = out.slice(out.indexOf('book-park'), out.indexOf('book-ask'));
+    assert.match(park, /<a class="go" href="https:\/\/park.example\/a"[^>]*>Book: Official site ↗<\/a>/);
+    assert.match(park, /Other options and links \(1\)/);
+    assert.doesNotMatch(park, /Same page/);
+    const ask = out.slice(out.indexOf('book-ask'), out.indexOf('</section>', out.indexOf('book-ask')));
+    assert.match(ask, /<span class="go plain">Book: The hotel desk<\/span> <span class="sub">at check-in<\/span>/);
+    assert.match(ask, /<summary>Tips<\/summary>/);
   });
 
   test('lo que hay que reservar ya va primero, aunque sea para el último día', () => {

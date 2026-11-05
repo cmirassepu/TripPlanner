@@ -42,6 +42,11 @@ export interface ToBook {
   why?: string | null;
   /** Hasta cuándo se puede esperar, en texto libre: «now», «by 1 Dec», «on the spot». */
   bookBy?: string | null;
+  /**
+   * La misma fecha límite como ISO, para ordenar. Si falta, se deduce de
+   * `bookBy` con `bookByDate`; «now» cuenta como la más urgente de todas.
+   */
+  bookByDate?: string | null;
   /** `asked` = pedido, esperando respuesta. `booked` ya no sale en la página. */
   status?: 'todo' | 'asked' | 'booked';
   options?: { name: string; url?: string | null; note?: string | null }[];
@@ -194,6 +199,26 @@ document.addEventListener('click', (e) => {
   target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
   back.hidden = false;
 });
+// ── Orden de lo que queda por reservar: por fecha límite o por día del viaje ──
+const sortBox = document.querySelector('.sortby');
+if (sortBox) {
+  const list = sortBox.nextElementSibling;
+  const sortBy = (key) => {
+    const items = [...list.children];
+    items.sort((a, b) => (a.dataset[key] || '9').localeCompare(b.dataset[key] || '9')
+      || (a.dataset.date || '9').localeCompare(b.dataset.date || '9'));
+    list.replaceChildren(...items);
+    sortBox.querySelectorAll('button').forEach((btn) => btn.setAttribute('aria-pressed', String(btn.dataset.sort === key)));
+    try { localStorage.setItem('tobook-sort', key); } catch {}
+  };
+  sortBox.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-sort]');
+    if (btn) sortBy(btn.dataset.sort);
+  });
+  let saved = null;
+  try { saved = localStorage.getItem('tobook-sort'); } catch {}
+  if (saved === 'date') sortBy('date');
+}
 // ── Notas para Claude: se guardan en la base de datos de la página ──
 const NOTE_STATUS = { new: 'New', seen: 'Seen', done: 'Done' };
 let notesCol = null;
@@ -629,21 +654,69 @@ function bookingRow(plan: TripPayload, b: Booking, lang: string): string {
  */
 function toBookBlock(plan: TripPayload, items: ToBook[]): string {
   if (!items.length) return '';
-  const sorted = [...items].sort((a, b) => (a.date ?? '9').localeCompare(b.date ?? '9'));
+  const first = plan.days[0]?.date ?? null;
+  const keyed = items.map((b) => ({ b, by: bookByDate(b, first) ?? '9', date: b.date ?? '9' }));
+  // Primero lo que hay que reservar ya; a igual fecha límite, por día del viaje.
+  keyed.sort((a, b) => a.by.localeCompare(b.by) || a.date.localeCompare(b.date));
   return `<section id="tobook">
   <h2>Still to book <span class="count">${items.length}</span></h2>
-  <p class="lede">In date order. Open “Options and links” for suggestions on where to book each one.</p>
-  <ul class="tobook">${sorted.map((b) => toBookCard(plan, b)).join('')}</ul>
+  <p class="lede">What needs booking soonest comes first. Open “Options and links” for suggestions on where to book each one.</p>
+  <div class="sortby">Sort by <button type="button" data-sort="by" aria-pressed="true">Book by</button><button type="button" data-sort="date" aria-pressed="false">Trip date</button></div>
+  <ul class="tobook">${keyed.map((k) => toBookCard(plan, k.b, k.by)).join('')}</ul>
 </section>`;
 }
 
-function toBookCard(plan: TripPayload, b: ToBook): string {
+const MONTH_INDEX: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+};
+
+/** `iso` más `n` días, en ISO. */
+function shiftDays(iso: string, n: number): string {
+  const [y, m, d] = parts(iso);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/**
+ * Fecha límite de una reserva como ISO, para ordenar. Si no viene dada, se
+ * saca del texto de `bookBy`: «now» o «ask now» van antes que cualquier fecha;
+ * «early/mid/late Nov» o «by 1 Dec» son esa fecha (el año, el último que no
+ * pase del día del viaje); «day before», «a few days before», «on arrival» y
+ * «on the spot» cuentan desde el día del viaje. Sin nada que entender, el día
+ * del viaje; sin día, `null` (va al final).
+ */
+export function bookByDate(b: ToBook, firstDay: string | null = null): string | null {
+  if (b.bookByDate) return b.bookByDate;
+  const ref = b.date ?? firstDay;
+  const text = (b.bookBy ?? '').trim().toLowerCase();
+  if (!text) return b.date ?? null;
+  if (/\b(now|asap|urgent|today)\b/.test(text)) return '0000-00-00';
+  const month = text.match(/\b(?:(early|mid|late|start of|end of)[\s-]+)?(?:(\d{1,2})\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?(?:\s+(\d{1,2})\b(?!\d))?/);
+  if (month) {
+    const m = MONTH_INDEX[month[3]];
+    const day = Number(month[2] ?? month[4]) || { early: 1, mid: 15, late: 25, 'start of': 1, 'end of': 28 }[month[1] ?? ''] || 1;
+    let year = ref ? parts(ref)[0] : new Date().getUTCFullYear();
+    const iso = (y: number) => `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (ref && iso(year) > ref) year -= 1;
+    return iso(year);
+  }
+  if (!ref) return null;
+  const before = text.match(/(\d+|a|few|a few|couple of|the)?\s*(day|days|week|weeks)\s+before/);
+  if (before) {
+    const unit = before[2].startsWith('week') ? 7 : 1;
+    const n = { a: 1, the: 1, few: 3, 'a few': 3, 'couple of': 2 }[before[1] ?? ''] ?? (Number(before[1]) || 1);
+    return shiftDays(ref, -n * unit);
+  }
+  if (/before the trip/.test(text) && firstDay) return shiftDays(firstDay, -1);
+  return b.date ?? null;
+}
+
+function toBookCard(plan: TripPayload, b: ToBook, by = '9'): string {
   const day = b.date ? plan.days.find((d) => d.date === b.date) : null;
   const when = day
     ? `<a class="when" href="#${esc(day.id)}">${esc(weekday(day.date))} ${esc(dayMonth(day.date))}</a>`
     : `<span class="when">${b.date ? esc(dayMonth(b.date)) : 'Any day'}</span>`;
   const asked = b.status === 'asked' ? '<span class="pill travel">Asked, waiting</span>' : '';
-  const by = b.bookBy ? `<span class="by">Book: ${esc(b.bookBy)}</span>` : '';
+  const byPill = b.bookBy ? `<span class="by">Book: ${esc(b.bookBy)}</span>` : '';
   const options = (b.options ?? [])
     .map((o) => {
       const name = o.url && /^https:\/\//.test(o.url)
@@ -657,7 +730,7 @@ function toBookCard(plan: TripPayload, b: ToBook): string {
       ${options ? `<ul>${options}</ul>` : ''}${b.tips ? `<p class="tip">${esc(b.tips)}</p>` : ''}
     </details>`
     : '';
-  return `<li id="book-${esc(b.id)}" class="bk"><div class="bh">${when}<b>${esc(b.title)}</b>${asked}${by}</div>
+  return `<li id="book-${esc(b.id)}" class="bk${by === '0000-00-00' ? ' due' : ''}" data-by="${esc(by)}" data-date="${esc(b.date ?? '9')}"><div class="bh">${when}<b>${esc(b.title)}</b>${asked}${byPill}</div>
     ${b.why ? `<p class="why">${esc(b.why)}</p>` : ''}${more}</li>`;
 }
 
@@ -891,6 +964,10 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .tobook{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .bk{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:6px;padding:10px 12px;display:grid;gap:4px}
 .bk:target{outline:2px solid var(--accent);outline-offset:2px}
+.bk.due .by{background:var(--warn);color:var(--card)}
+.sortby{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px;font-size:.85rem;color:var(--muted)}
+.sortby button{font:inherit;font-size:.82rem;font-weight:600;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:2px 10px;cursor:pointer}
+.sortby button[aria-pressed="true"]{color:var(--card);background:var(--accent);border-color:var(--accent)}
 .bh{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .bh .when{font-variant-numeric:tabular-nums;min-width:5.5rem}
 .by{margin-left:auto;font-size:.78rem;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:1px 8px;border-radius:99px}

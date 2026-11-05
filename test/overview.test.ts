@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { TripFile, TripPayload } from '../src/model/types.ts';
-import { renderOverview, dayStatus } from '../src/render/overview.ts';
+import { bookByDate, renderOverview, dayStatus } from '../src/render/overview.ts';
 
 const root = new URL('../', import.meta.url);
 const trip: TripFile = JSON.parse(
@@ -87,6 +87,8 @@ describe('vista general', () => {
     const top = out.slice(out.indexOf('id="tobook"'), out.indexOf('class="route"'));
     assert.ok(top.length > 0, 'la sección va antes de la ruta');
     assert.ok(top.indexOf('book-hotel') < top.indexOf('book-late'), 'por fecha; sin fecha, al final');
+    assert.match(top, /<div class="sortby">Sort by <button type="button" data-sort="by" aria-pressed="true">Book by<\/button>/);
+    assert.match(top, /class="bk due" data-by="0000-00-00" data-date="[0-9-]+"/);
     assert.match(top, new RegExp(`href="#${d.id}"`));
     assert.match(top, /Hotel &lt;near&gt; the airport/);
     assert.match(top, /<details class="opts"><summary>Options and links \(2\)/);
@@ -94,5 +96,39 @@ describe('vista general', () => {
     assert.doesNotMatch(top, /javascript:/);
     assert.doesNotMatch(out, /Already booked/);
     assert.match(out.slice(out.indexOf('id="todo"')), /2 things still to book/);
+  });
+
+  test('lo que hay que reservar ya va primero, aunque sea para el último día', () => {
+    const [d0, d1] = trip.payload.days;
+    const out = renderOverview(trip.payload, {
+      toBook: [
+        { id: 'spot', date: d0.date, title: 'On the spot', bookBy: 'on the spot' },
+        { id: 'soon', date: d1.date, title: 'Soon', bookBy: 'now' },
+        { id: 'mid', date: d0.date, title: 'Mid', bookByDate: '2000-01-01' },
+      ],
+    });
+    const top = out.slice(out.indexOf('id="tobook"'), out.indexOf('class="route"'));
+    const at = (id: string) => top.indexOf(`book-${id}`);
+    assert.ok(at('soon') < at('mid') && at('mid') < at('spot'), 'now, luego la fecha dada, luego el día del viaje');
+  });
+
+  test('bookByDate entiende el texto libre de «book by»', () => {
+    const on = (bookBy: string, date: string | null = '2026-12-25') => bookByDate({ id: 'x', title: 'x', date, bookBy }, '2026-12-19');
+    assert.equal(on('now'), '0000-00-00');
+    assert.equal(on('ask now'), '0000-00-00');
+    assert.equal(on('mid-Nov'), '2026-11-15');
+    assert.equal(on('early Dec'), '2026-12-01');
+    assert.equal(on('late Nov'), '2026-11-25');
+    assert.equal(on('by 1 Dec'), '2026-12-01');
+    assert.equal(on('early Jan', '2027-01-07'), '2027-01-01');
+    assert.equal(on('mid-Dec', '2027-01-03'), '2026-12-15');
+    assert.equal(on('day before'), '2026-12-24');
+    assert.equal(on('a few days before'), '2026-12-22');
+    assert.equal(on('on arrival'), '2026-12-25');
+    assert.equal(on('on the spot'), '2026-12-25');
+    assert.equal(on('before the trip', null), '2026-12-18');
+    assert.equal(on('', null), null);
+    assert.equal(on('whenever', null), null);
+    assert.equal(bookByDate({ id: 'x', title: 'x', date: null, bookBy: 'now', bookByDate: '2026-11-20' }), '2026-11-20');
   });
 });

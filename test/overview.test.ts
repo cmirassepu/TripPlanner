@@ -66,6 +66,15 @@ describe('vista general', () => {
     assert.match(out, /1 optional change</);
   });
 
+  test('las reservas van plegadas en dos tablas, con su cuenta', () => {
+    const n = trip.payload.bookings?.length ?? 0;
+    const sec = html.slice(html.indexOf('<section id="bookings">'), html.indexOf('<section id="todo">'));
+    assert.match(sec, /data-all="open" data-in="bookings"/);
+    assert.match(sec, new RegExp(`<details class="fold"><summary><h3>Hotels <span class="count">${trip.payload.stays.length}</span>`));
+    assert.match(sec, new RegExp(`<details class="fold"><summary><h3>Flights, transfers and activities <span class="count">${n}</span>`));
+    assert.doesNotMatch(sec, /<details class="fold" open/);
+  });
+
   test('las tareas propias encabezan la lista de pendientes', () => {
     const out = renderOverview(trip.payload, { tasks: [{ text: 'Make <the> GPT', when: 'later' }] });
     const todo = out.slice(out.indexOf('id="todo"'));

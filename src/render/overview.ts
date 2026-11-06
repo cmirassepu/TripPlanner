@@ -166,7 +166,7 @@ ${ideasBlock(plan, opts.ideas ?? [])}
 </section>
 
 <section id="bookings">
-  <h2>Bookings</h2>
+  <h2>Bookings <span class="tools"><button type="button" data-all="open" data-in="bookings">Open all</button><button type="button" data-all="close" data-in="bookings">Close all</button></span></h2>
   ${bookingsBlock(plan, lang)}
 </section>
 
@@ -637,12 +637,14 @@ function bookingsBlock(plan: TripPayload, lang: string): string {
     .map((b) => bookingRow(plan, b, lang))
     .join('');
 
-  return `<h3>Hotels</h3>
-  <div class="scroll"><table><thead><tr><th>Nights</th><th>Hotel</th><th>Reference</th></tr></thead><tbody>${stays}</tbody></table></div>
-  <h3>Flights, transfers and activities</h3>
+  // Cada tabla va plegada: la sección es larga y casi siempre se busca una sola reserva.
+  const n = plan.bookings?.length ?? 0;
+  return `<details class="fold"><summary><h3>Hotels <span class="count">${plan.stays.length}</span></h3></summary>
+  <div class="scroll"><table><thead><tr><th>Nights</th><th>Hotel</th><th>Reference</th></tr></thead><tbody>${stays}</tbody></table></div></details>
+  <details class="fold"><summary><h3>Flights, transfers and activities <span class="count">${n}</span></h3></summary>
   <div class="scroll"><table><thead><tr><th>Date</th><th>What</th><th>Reference</th></tr></thead><tbody>${
     others || '<tr><td colspan="3">None recorded</td></tr>'
-  }</tbody></table></div>`;
+  }</tbody></table></div></details>`;
 }
 
 function bookingRow(plan: TripPayload, b: Booking, lang: string): string {
@@ -1003,8 +1005,8 @@ th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu
 .tip{margin:6px 0 0;font-size:.85rem;color:var(--muted);max-width:70ch}
 .sublist{margin:6px 0 0;padding-left:18px;display:grid;gap:2px;font-size:.9rem}
 summary{cursor:pointer}
-.stop>summary,.choice>summary,.area>summary,.place>summary,.idea>summary{list-style:none}
-.stop>summary::-webkit-details-marker,.choice>summary::-webkit-details-marker,.area>summary::-webkit-details-marker,.place>summary::-webkit-details-marker,.idea>summary::-webkit-details-marker{display:none}
+.stop>summary,.choice>summary,.area>summary,.fold>summary,.place>summary,.idea>summary{list-style:none}
+.stop>summary::-webkit-details-marker,.choice>summary::-webkit-details-marker,.area>summary::-webkit-details-marker,.fold>summary::-webkit-details-marker,.place>summary::-webkit-details-marker,.idea>summary::-webkit-details-marker{display:none}
 .stop>summary{display:grid;grid-template-columns:4.2rem 1fr;gap:8px;padding:3px 0;border-radius:4px}
 .stop>summary:hover,.place>summary:hover,.idea>summary:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .stop>summary .t::before,.choice>summary::before{content:"▸ ";color:var(--muted)}
@@ -1027,9 +1029,9 @@ summary{cursor:pointer}
 .choice>summary{font-weight:600;font-size:.9rem}
 .day-ideas{display:grid;gap:6px;margin:0 0 12px}
 .day-ideas .lbl{margin:0}
-.area>summary{padding:4px 0;margin-bottom:8px}
-.area>summary h3::before,.idea>summary b::before{content:"▸ ";color:var(--muted)}
-.area[open]>summary h3::before,.idea[open]>summary b::before{content:"▾ "}
+.area>summary,.fold>summary{padding:4px 0;margin-bottom:8px}
+.area>summary h3::before,.fold>summary h3::before,.idea>summary b::before{content:"▸ ";color:var(--muted)}
+.area[open]>summary h3::before,.fold[open]>summary h3::before,.idea[open]>summary b::before{content:"▾ "}
 .area{margin-bottom:16px}
 .place>summary{border-radius:4px}
 .place[open]>summary{margin-bottom:6px}

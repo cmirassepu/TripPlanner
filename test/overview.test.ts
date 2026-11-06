@@ -95,6 +95,8 @@ describe('vista general', () => {
     });
     const top = out.slice(out.indexOf('id="tobook"'), out.indexOf('class="route"'));
     assert.ok(top.length > 0, 'la sección va antes de la ruta');
+    assert.match(top, /<details class="fold top"><summary><h2>Still to book <span class="count">2<\/span>/);
+    assert.doesNotMatch(top, /<details class="fold top" open/);
     assert.ok(top.indexOf('book-hotel') < top.indexOf('book-late'), 'por fecha; sin fecha, al final');
     assert.match(top, /<div class="sortby">Sort by <button type="button" data-sort="by" aria-pressed="true">Book by<\/button>/);
     assert.match(top, /class="bk due" data-by="0000-00-00" data-date="[0-9-]+"/);

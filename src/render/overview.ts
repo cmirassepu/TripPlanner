@@ -189,7 +189,7 @@ const back = document.querySelector('.back');
 const trail = [];
 function reveal(el) {
   for (let d = el.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
-  if (el.tagName === 'LI' && el.firstElementChild?.tagName === 'DETAILS') el.firstElementChild.open = true;
+  if (el.firstElementChild?.tagName === 'DETAILS') el.firstElementChild.open = true;
 }
 document.addEventListener('click', (e) => {
   const tools = e.target.closest('[data-all]');
@@ -229,6 +229,12 @@ if (sortBox) {
   let saved = null;
   try { saved = localStorage.getItem('tobook-sort'); } catch {}
   if (saved === 'date') sortBy('date');
+}
+// ── La lista de lo que queda por reservar recuerda si se dejó abierta ──
+const topFold = document.querySelector('#tobook details.fold');
+if (topFold) {
+  try { if (localStorage.getItem('tobook-open') === '1') topFold.open = true; } catch {}
+  topFold.addEventListener('toggle', () => { try { localStorage.setItem('tobook-open', topFold.open ? '1' : '0'); } catch {} });
 }
 // ── Notas para Claude: se guardan en la base de datos de la página ──
 const NOTE_STATUS = { new: 'New', seen: 'Seen', done: 'Done' };
@@ -671,11 +677,13 @@ function toBookBlock(plan: TripPayload, items: ToBook[]): string {
   const keyed = items.map((b) => ({ b, by: bookByDate(b, first) ?? '9', date: b.date ?? '9' }));
   // Primero lo que hay que reservar ya; a igual fecha límite, por día del viaje.
   keyed.sort((a, b) => a.by.localeCompare(b.by) || a.date.localeCompare(b.date));
+  // La lista va plegada bajo el título, que lleva la cuenta: ocupa media página y no siempre se viene a ella.
   return `<section id="tobook">
-  <h2>Still to book <span class="count">${items.length}</span></h2>
+  <details class="fold top"><summary><h2>Still to book <span class="count">${items.length}</span></h2></summary>
   <p class="lede">What needs booking soonest comes first. Each card has a “Book” link to the recommended place; other options are folded below it.</p>
   <div class="sortby">Sort by <button type="button" data-sort="by" aria-pressed="true">Book by</button><button type="button" data-sort="date" aria-pressed="false">Trip date</button></div>
   <ul class="tobook">${keyed.map((k) => toBookCard(plan, k.b, k.by)).join('')}</ul>
+  </details>
 </section>`;
 }
 
@@ -1030,8 +1038,10 @@ summary{cursor:pointer}
 .day-ideas{display:grid;gap:6px;margin:0 0 12px}
 .day-ideas .lbl{margin:0}
 .area>summary,.fold>summary{padding:4px 0;margin-bottom:8px}
-.area>summary h3::before,.fold>summary h3::before,.idea>summary b::before{content:"▸ ";color:var(--muted)}
-.area[open]>summary h3::before,.fold[open]>summary h3::before,.idea[open]>summary b::before{content:"▾ "}
+.fold.top>summary{padding:0;margin-bottom:12px}
+.fold.top>summary h2{margin-bottom:0}
+.area>summary h3::before,.fold>summary h3::before,.fold>summary h2::before,.idea>summary b::before{content:"▸ ";color:var(--muted)}
+.area[open]>summary h3::before,.fold[open]>summary h3::before,.fold[open]>summary h2::before,.idea[open]>summary b::before{content:"▾ "}
 .area{margin-bottom:16px}
 .place>summary{border-radius:4px}
 .place[open]>summary{margin-bottom:6px}
